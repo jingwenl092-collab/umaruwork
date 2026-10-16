@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>日译训练场 · 中日翻译口译训练</title>
-<meta name="description" content="每天十句，练出中日翻译的底气：看句口译或打字，AI 教练逐句讲评。" />
+<title>日译训练场 · 中日翻译与同传训练</title>
+<meta name="description" content="每天十句，练出中日翻译与同声传译的底气：支持盲听限时同传与看句翻译，即时对比参考译文。" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -24,22 +24,29 @@
   <!-- 首页 -->
   <section id="view-home" class="view">
     <div class="hero">
-      <h1>每天十句，练出中日翻译的底气</h1>
-      <p>看句 → 开口翻译（或打字）→ AI 教练逐句讲评。不追分数，只求每句都比上一句更好。</p>
+      <h1>每天十句，练出中日翻译与同传的底气</h1>
+      <p>盲听限时开口 / 看句翻译 → 秒级对比标准译文与重合度，逼出肌肉记忆。</p>
     </div>
     <div class="card pick-card">
       <div class="pick-label">① 练习方向</div>
-      <div class="dir-row">
-        <button class="dir-btn active" data-dir="zh2ja"><b>中 → 日</b><span>看着中文，说出日语</span></button>
-        <button class="dir-btn" data-dir="ja2zh"><b>日 → 中</b><span>看着日语，说出中文</span></button>
+      <div class="dir-row" id="dirRow">
+        <button class="dir-btn active" data-dir="zh2ja"><b>中 → 日</b><span>听/看中文，译成日语</span></button>
+        <button class="dir-btn" data-dir="ja2zh"><b>日 → 中</b><span>听/看日语，译成中文</span></button>
       </div>
-      <div class="pick-label">② 难度</div>
+
+      <div class="pick-label">② 训练模式</div>
+      <div class="dir-row" id="trainModeRow">
+        <button class="dir-btn active" data-tmode="interp"><b>🎧 盲听限时（同传/交传）</b><span>隐藏原句自动播音，读完立刻限时开口</span></button>
+        <button class="dir-btn" data-tmode="sight"><b>📖 常规看句（视译/笔译）</b><span>直接显示原句与注音，自由口译或打字</span></button>
+      </div>
+
+      <div class="pick-label">③ 难度</div>
       <div class="pill-row" id="levelRow">
         <button class="pill" data-level="1">初级</button>
         <button class="pill active" data-level="2">中级</button>
         <button class="pill" data-level="3">高级</button>
       </div>
-      <div class="pick-label">③ 场景</div>
+      <div class="pick-label">④ 场景</div>
       <div class="pill-row" id="sceneRow">
         <button class="pill active" data-scene="daily">日常生活</button>
         <button class="pill" data-scene="travel">旅行</button>
@@ -49,7 +56,7 @@
       <div class="start-row">
         <button class="btn-primary big" id="startBtn">开始练习 · 10 句</button>
       </div>
-      <p class="tip" id="voiceTip">提示：语音口译建议使用 Chrome 或 Edge 浏览器，并允许麦克风权限。</p>
+      <p class="tip" id="voiceTip">提示：语音口译与自动朗读建议使用 Chrome 或 Edge 浏览器，并允许麦克风权限。</p>
     </div>
     <div class="stats-row" id="homeStats"></div>
   </section>
@@ -64,11 +71,16 @@
     <div class="p-progress"><div class="p-progress-in" id="progressBar"></div></div>
 
     <div class="card src-card">
-      <div class="src-label" id="srcLabel">原句</div>
+      <div class="src-head">
+        <div class="src-label" id="srcLabel">原句</div>
+        <div class="timer-badge hidden" id="timerBadge">⏱ 反应限时 <b id="timerSec">15</b>s</div>
+      </div>
       <div class="src-text" id="srcText"></div>
       <div class="src-actions">
-        <button class="btn-hear hidden" id="speakBtn">▷ 朗读原句</button>
+        <button class="btn-hear" id="speakBtn">▷ 朗读原句</button>
+        <button class="btn-ghost small hidden" id="peekBtn">👁 显示原句</button>
       </div>
+      <div class="hint-text hidden" id="srcSpeechHint"></div>
     </div>
 
     <div class="card input-card" id="inputCard">
@@ -83,26 +95,20 @@
         <label class="ans-label" for="answerInput">你的翻译（识别结果可手动修正）</label>
         <textarea id="answerInput" rows="3" placeholder="对着麦克风说出来，或直接在这里打字"></textarea>
       </div>
-      <button class="btn-primary big" id="submitBtn" disabled>请 AI 教练讲评</button>
-    </div>
-
-    <div class="loading hidden" id="loadingCard"><span class="spinner"></span>AI 教练正在讲评……</div>
-
-    <div class="card error-card hidden" id="errorCard">
-      <div class="err-msg" id="errorMsg"></div>
-      <button class="btn-primary" id="retryBtn">重试讲评</button>
+      <button class="btn-primary big" id="submitBtn" disabled>提交对比参考译文</button>
     </div>
 
     <div class="card feedback-card hidden" id="feedbackCard">
       <div class="fb-head">
-        <span class="fb-badge">AI 讲评</span>
+        <span class="fb-badge" id="fbBadge">重合度 0%</span>
         <span class="fb-verdict" id="fbVerdict"></span>
       </div>
       <div id="fbBody"></div>
       <div class="ref-box">
-        <div class="ref-label">参考译文</div>
+        <div class="ref-label">标准参考译文（绿底为命中字词）</div>
         <div class="ref-text" id="refText"></div>
-        <button class="btn-hear" id="refSpeakBtn">▷ 朗读</button>
+        <div class="ref-diff" id="refDiff"></div>
+        <button class="btn-hear" id="refSpeakBtn">▷ 朗读参考译文</button>
         <div class="hint-text hidden" id="speechHint"></div>
       </div>
       <button class="btn-primary big" id="nextBtn">下一句</button>
@@ -140,8 +146,6 @@
 
 <footer class="foot">日译训练场 · 坚持每天十句，翻译自然开口成章</footer>
 
-<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="js/cloud-config.js"></script>
 <script src="js/data-daily.js"></script>
 <script src="js/data-travel.js"></script>
 <script src="js/data-business.js"></script>
