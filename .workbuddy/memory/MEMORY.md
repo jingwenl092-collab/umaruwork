@@ -21,6 +21,10 @@
 - 振假名：`app.js` 的 `furiToHtml()` 把 `{汉字|读音}` → `<ruby>`；只在显示层注音，朗读和 AI 讲评仍用纯文本
 - TTS 踩坑：设备缺对应语种语音包时，`speechSynthesis.speak()` 会**静默失败**（不发声也不报错），用户感受就是"点了没反应"。必须自己用 `getVoices()` 检测并给出可见提示（含各系统安装语音包指引），不能只调 speak()
 - 改完本地代码**不会自动同步到线上**，需重新发布（会覆盖线上现有内容），且每轮都要用户明确同意
+- 本会话跑 git 远程命令**必须绕开代理**，最稳写法（env 清空 + git 配置层面再清一次）：
+  `http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= all_proxy= git -c http.proxy= -c https.proxy= push`
+  只清 env 有时仍会被代理拦截；GitHub 连接还会间歇性 `Connection was reset`，失败重试即可
+- 写重试循环时别用 `cmd | tail -3 && break`——`tail` 退出码恒为 0，失败也会 break；要判 `PIPESTATUS[0]`
 - Git 远程命令在本会话里**必须绕过代理**才能连通 GitHub（环境注入的 127.0.0.1:2325 代理对 git 的 CONNECT 返回 502）：
   `http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= all_proxy= git push`
 - 远程仓库：https://github.com/jingwenl092-collab/umaruwork （main 分支）
