@@ -111,6 +111,22 @@
         <button class="btn-hear" id="refSpeakBtn">▷ 朗读参考译文</button>
         <div class="hint-text hidden" id="speechHint"></div>
       </div>
+
+      <div class="ai-box" id="aiBox">
+        <div class="ai-head">🤖 AI 讲评</div>
+
+        <div class="ai-state" id="aiLoading">
+          <span class="spinner"></span> 教练正在看你的翻译…
+        </div>
+
+        <div class="ai-state hidden" id="aiError">
+          <span class="ai-err-text" id="aiErrText"></span>
+          <button class="btn-ghost small" id="aiRetryBtn">重试</button>
+        </div>
+
+        <div class="hidden" id="aiContent"></div>
+      </div>
+
       <button class="btn-primary big" id="nextBtn">下一句</button>
     </div>
   </section>
@@ -146,6 +162,8 @@
 
 <footer class="foot">日译训练场 · 坚持每天十句，翻译自然开口成章</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
+<script src="js/cloud-config.js"></script>
 <script src="js/data-daily.js"></script>
 <script src="js/data-travel.js"></script>
 <script src="js/data-business.js"></script>

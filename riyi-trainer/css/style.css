@@ -212,6 +212,41 @@ button { font-family: inherit; cursor: pointer; }
 }
 .feedback-card .btn-primary { margin-top: 16px; }
 
+/* ---- AI 讲评区 ---- */
+.ai-box {
+  margin-top: 14px; background: var(--accent-soft);
+  border: 1px solid var(--border); border-radius: var(--radius-s); padding: 13px 15px;
+}
+.ai-head { font-size: 13px; font-weight: 700; color: var(--accent-ink); margin-bottom: 8px; }
+.ai-state { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--muted); flex-wrap: wrap; }
+.ai-err-text { flex: 1; min-width: 180px; color: var(--danger); line-height: 1.6; }
+.ai-verdict { font-size: 15.5px; font-weight: 700; color: var(--accent-ink); line-height: 1.7; }
+.ai-box .fb-sec-t.good { color: var(--accent); }
+.ai-box .fb-sec-t.sug { color: var(--warn); }
+
+/* 讲评要点列表 */
+.fb-li {
+  font-size: 14.5px; line-height: 1.7; margin: 5px 0;
+  padding: 7px 12px; border-radius: 8px; background: #fff;
+}
+.fb-li.good { border-left: 3px solid var(--accent); color: var(--accent-ink); }
+.fb-li.sug { border-left: 3px solid var(--warn); color: var(--text); }
+
+/* 报告/历史中的 AI 讲评行 */
+.rpt-row.ai p { font-size: 14px; line-height: 1.7; }
+.rpt-row.ai .ai-v { font-weight: 700; color: var(--accent-ink); }
+.rpt-row.ai .ai-g { color: var(--accent-ink); }
+.rpt-row.ai .ai-s { color: var(--muted); }
+
+/* 讲评加载中的转圈 */
+.spinner {
+  flex: none; width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+
 /* ---- 报告/历史列表 ---- */
 .action-row { display: flex; gap: 12px; margin-top: 18px; align-items: center; flex-wrap: wrap; }
 .action-row .btn-primary.big { width: auto; flex: 1; min-width: 160px; }

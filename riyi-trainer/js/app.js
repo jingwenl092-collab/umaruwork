@@ -136,12 +136,168 @@
     };
   }
 
+  // ---------- 云端 AI 讲评（keyless 云 LLM） ----------
+  var cloud = null;
+  var cachedModel = null;
+  var cloudError = null;
+  var aiToken = 0;      // 自增令牌：用于丢弃「已经翻页但才返回」的过期讲评
+  var aiLastCall = null;
+
+  function initCloud() {
+    if (!window.WorkBuddyCloud || !window.PUBLIC_CONFIG) {
+      cloudError = 'AI 服务未能加载，请检查网络后刷新页面。';
+      return;
+    }
+    try {
+      cloud = window.WorkBuddyCloud.createWorkBuddyCloud({
+        endpoint: window.PUBLIC_CONFIG.endpoint,
+        oauthRelayBaseUrl: window.PUBLIC_CONFIG.oauthRelayBaseUrl,
+        publishableKey: window.PUBLIC_CONFIG.publishableKey
+      });
+    } catch (e) {
+      cloudError = (e && e.message) ? e.message : 'AI 服务初始化失败。';
+    }
+  }
+
+  var SYSTEM_PROMPT = '你是资深中日翻译教练，正在一对一指导学员练句子翻译。学员作答可能来自语音识别，若有同音错字请按其本意宽容评价。输出必须是且仅是一个 JSON 对象，不要打分，不要多余文字。长度限制：verdict 为一句话总评，不超过20字；highlights 为做得好的点，1-2条，每条不超过25字；suggestions 为改进建议，1-2条，每条不超过40字且必须写出更地道的正确说法。格式：{"verdict":"","highlights":[],"suggestions":[]}';
+
+  // 把 SDK 抛出的错误码翻译成人话
+  function friendlyLLMError(error) {
+    var code = (error && error.error && error.error.code) || (error && error.code) || '';
+    code = String(code);
+    if (code === 'model_empty') return '当前环境暂无可用模型，请稍后再试。';
+    if (code === 'sdk_missing') return 'AI 服务未能加载，请检查网络后刷新页面。';
+    if (code.indexOf('quota_') === 0) return 'AI 讲评用量已达上限，请稍后再试。';
+    if (code.indexOf('auth_') === 0) return '云服务校验失败，请在已发布的页面中使用（本地打开会校验失败）。';
+    if (code.indexOf('request_') === 0) return '请求参数异常，请刷新页面重试。';
+    if (code.indexOf('gateway_') === 0 || code.indexOf('model_') === 0) return 'AI 服务暂时不可用，请点击重试。';
+    return '讲评失败，请稍后重试。';
+  }
+
+  // 讲评要快：优先响应最快的模型，其次保证可用。
+  // 注意：直接取列表第一个会落到思考型模型（单次约 110 秒），必须显式挑选。
+  var FAST_MODELS = ['deepseek-v4-flash', 'hunyuan-chat', 'default'];
+
+  async function getModel() {
+    if (cachedModel) return cachedModel;
+    if (!cloud) { var e = new Error('sdk missing'); e.code = 'sdk_missing'; throw e; }
+    var list = await cloud.llm.models.list();
+    var enabled = [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].disabled !== true) enabled.push(list[i]);
+    }
+    if (!enabled.length) { var err = new Error('no model'); err.code = 'model_empty'; throw err; }
+
+    var pick = null;
+    for (var k = 0; k < FAST_MODELS.length; k++) {
+      for (var n = 0; n < enabled.length; n++) {
+        if (enabled[n].id === FAST_MODELS[k]) { pick = enabled[n]; break; }
+      }
+      if (pick) break;
+    }
+    if (!pick) {
+      for (var p = 0; p < enabled.length; p++) {
+        if (enabled[p].supportsReasoning !== true) { pick = enabled[p]; break; }
+      }
+    }
+    if (!pick) pick = enabled[0];
+    cachedModel = pick;
+    return pick;
+  }
+
+  // 云端仅支持流式调用，必须 stream:true 并用 for await 逐块拼接
+  async function getFeedback(dir, source, reference, userText) {
+    var model = await getModel();
+    var dirText = dir === 'zh2ja'
+      ? '中译日（把中文原句译成日语）'
+      : '日译中（把日语原句译成中文）';
+    var userContent = '练习方向：' + dirText +
+      '\n原句：' + source +
+      '\n参考译文：' + reference +
+      '\n学员的翻译（可能来自语音识别转写）：' + userText +
+      '\n请按要求输出 JSON 讲评。';
+
+    var answer = '';
+    for await (var chunk of cloud.llm.chat.completions.create({
+      model: model.id,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userContent }
+      ],
+      stream: true,
+      temperature: 0.5
+    })) {
+      var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+      if (delta && delta.content) answer += delta.content;
+    }
+    return parseFeedback(answer);
+  }
+
+  function parseFeedback(text) {
+    var t = String(text || '').trim();
+    // 兼容部分模型输出 ```json ... ``` 围栏的情况
+    var m = t.match(/\{[\s\S]*\}/);
+    var obj = null;
+    if (m) { try { obj = JSON.parse(m[0]); } catch (e) { obj = null; } }
+    if (!obj && t) obj = { verdict: t, highlights: [], suggestions: [] };
+    if (!obj) { var err = new Error('empty'); err.code = 'empty_answer'; throw err; }
+    if (!Array.isArray(obj.highlights)) obj.highlights = obj.highlights ? [String(obj.highlights)] : [];
+    if (!Array.isArray(obj.suggestions)) obj.suggestions = obj.suggestions ? [String(obj.suggestions)] : [];
+    return obj;
+  }
+
+  function setAIState(which) {
+    ['aiLoading', 'aiError', 'aiContent'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.classList.toggle('hidden', id !== which);
+    });
+  }
+
+  function renderAIContent(f) {
+    var html = '<div class="ai-verdict">' + esc(f.verdict || '已完成这句的讲评。') + '</div>';
+    if (f.highlights && f.highlights.length) {
+      html += '<div class="fb-sec"><div class="fb-sec-t good">做得好</div>' +
+        f.highlights.map(function (h) { return '<div class="fb-li good">' + esc(h) + '</div>'; }).join('') +
+        '</div>';
+    }
+    if (f.suggestions && f.suggestions.length) {
+      html += '<div class="fb-sec"><div class="fb-sec-t sug">可以更好</div>' +
+        f.suggestions.map(function (x) { return '<div class="fb-li sug">' + esc(x) + '</div>'; }).join('') +
+        '</div>';
+    }
+    return html;
+  }
+
+  async function requestAIFeedback(call) {
+    aiLastCall = call;
+    var token = ++aiToken;
+    setAIState('aiLoading');
+    try {
+      var f = await getFeedback(call.dir, call.source, call.reference, call.userText);
+      if (token !== aiToken) return;   // 用户已翻到下一句，结果作废
+      $('aiContent').innerHTML = renderAIContent(f);
+      setAIState('aiContent');
+      // 讲评结果并入本轮记录，报告页与历史页可回看
+      var item = state.results[state.results.length - 1];
+      if (item) {
+        item.aiVerdict = f.verdict || '';
+        item.aiHighlights = f.highlights || [];
+        item.aiSuggestions = f.suggestions || [];
+      }
+    } catch (e) {
+      if (token !== aiToken) return;
+      $('aiErrText').textContent = (cloudError && !cloud) ? cloudError : friendlyLLMError(e);
+      setAIState('aiError');
+    }
+  }
+
   // ---------- 视图切换 ----------
   var views = {
     home: $('view-home'), practice: $('view-practice'),
     report: $('view-report'), history: $('view-history')
   };
   function go(name) {
+    aiToken++;   // 切换页面后，尚未返回的讲评一律作废
     stopTimer();
     stopRec();
     if ('speechSynthesis' in window) {
@@ -357,6 +513,7 @@
   }
 
   function renderSentence() {
+    aiToken++;   // 进入下一句后，上一句尚未返回的讲评一律作废
     stopTimer();
     stopRec();
     state.current = state.queue[state.idx];
@@ -490,6 +647,9 @@
 
     var diff = compareTexts(call.userText, call.reference);
     renderFeedback(diff, call);
+
+    // 本地比对先立刻呈现，AI 讲评在后台补上（失败也不影响本地结果）
+    requestAIFeedback(call);
   }
 
   function renderFeedback(diff, call) {
@@ -538,6 +698,20 @@
     renderReport(rec);
   }
 
+  // 一条练习记录的 AI 讲评片段（没有讲评则返回空串）
+  function aiHTML(it) {
+    var v = it.aiVerdict || '';
+    var g = it.aiHighlights || [];
+    var s = it.aiSuggestions || [];
+    if (!v && !g.length && !s.length) return '';
+    var h = '<div class="rpt-row ai"><span>AI 讲评</span>';
+    if (v) h += '<p class="ai-v">' + esc(v) + '</p>';
+    g.forEach(function (x) { h += '<p class="ai-g">✓ ' + esc(x) + '</p>'; });
+    s.forEach(function (x) { h += '<p class="ai-s">→ ' + esc(x) + '</p>'; });
+    h += '</div>';
+    return h;
+  }
+
   // ---------- 报告页 ----------
   function renderReport(rec) {
     var modeText = rec.trainMode === 'interp' ? '盲听同传' : '常规看句';
@@ -556,6 +730,7 @@
         '</div><div class="rpt-body">' +
         '<div class="rpt-row"><span>你的翻译</span><p>' + esc(it.user) + '</p></div>' +
         '<div class="rpt-row ref"><span>参考译文</span><p>' + refHtml + '</p></div>' +
+        aiHTML(it) +
         '</div></div>';
     });
     $('reportList').innerHTML = html;
@@ -623,7 +798,9 @@
           var refHtml = (r.dir === 'zh2ja' && it.refFuri) ? furiToHtml(it.refFuri) : esc(it.ref);
           return '<div class="rpt-sent"><b>第 ' + (i + 1) + ' 句</b>' + srcHtml +
             '<p class="rpt-v">你的作答：' + esc(it.user) + '</p>' +
-            '<p class="rpt-v">参考译文：' + refHtml + '（' + esc(it.verdict) + '）</p></div>';
+            '<p class="rpt-v">参考译文：' + refHtml + '（' + esc(it.verdict) + '）</p>' +
+            (it.aiVerdict ? '<p class="rpt-v ai">讲评：' + esc(it.aiVerdict) + '</p>' : '') +
+            '</div>';
         }).join('');
         var modeTag = r.trainMode === 'interp' ? ' · 盲听同传' : '';
         html += '<div class="rpt-item card">' +
@@ -704,6 +881,10 @@
     if (state.mode === 'voice') startRec();
   });
 
+  $('aiRetryBtn').addEventListener('click', function () {
+    if (aiLastCall) requestAIFeedback(aiLastCall);
+  });
+
   $('micBtn').addEventListener('click', function () {
     if (state.recognizing && state.recognition) state.recognition.stop();
     else startRec();
@@ -740,6 +921,7 @@
   bindExpand('historyList');
 
   // ---------- 启动 ----------
+  initCloud();
   if (!voiceSupported) {
     state.mode = 'type';
     $('voiceTip').textContent = '提示：当前浏览器不支持语音识别，已自动切换为打字输入模式。推荐使用 Chrome 或 Edge。';
