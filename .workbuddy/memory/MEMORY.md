@@ -18,6 +18,9 @@
 - 素材库内置 120 组句对，按难度（初/中/高）×场景（日常生活、旅行、商务、校园）分类
 - TTS 踩坑：设备缺对应语种语音包时，`speechSynthesis.speak()` 会**静默失败**（不发声也不报错），用户感受就是"点了没反应"。必须自己用 `getVoices()` 检测并给出可见提示（含各系统安装语音包指引），不能只调 speak()
 - 改完本地代码**不会自动同步到线上**，需重新发布（会覆盖线上现有内容），且每轮都要用户明确同意
+- Git 远程命令在本会话里**必须绕过代理**才能连通 GitHub（环境注入的 127.0.0.1:2325 代理对 git 的 CONNECT 返回 502）：
+  `http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= all_proxy= git push`
+- 远程仓库：https://github.com/jingwenl092-collab/umaruwork （main 分支）
 
 ## 暂不做（后续版本）
 自定义素材导入、账户系统、错题本/间隔重复、发音评测、单词语法教学
