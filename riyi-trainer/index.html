@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>日译训练场 · 中日翻译口译训练</title>
+<meta name="description" content="每天十句，练出中日翻译的底气：看句口译或打字，AI 教练逐句讲评。" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <div class="logo" id="logoBtn"><span class="logo-mark"></span>日译训练场</div>
+    <nav class="topnav">
+      <button class="navlink" id="navHome">首页</button>
+      <button class="navlink" id="navHistory">练习日志</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 首页 -->
+  <section id="view-home" class="view">
+    <div class="hero">
+      <h1>每天十句，练出中日翻译的底气</h1>
+      <p>看句 → 开口翻译（或打字）→ AI 教练逐句讲评。不追分数，只求每句都比上一句更好。</p>
+    </div>
+    <div class="card pick-card">
+      <div class="pick-label">① 练习方向</div>
+      <div class="dir-row">
+        <button class="dir-btn active" data-dir="zh2ja"><b>中 → 日</b><span>看着中文，说出日语</span></button>
+        <button class="dir-btn" data-dir="ja2zh"><b>日 → 中</b><span>看着日语，说出中文</span></button>
+      </div>
+      <div class="pick-label">② 难度</div>
+      <div class="pill-row" id="levelRow">
+        <button class="pill" data-level="1">初级</button>
+        <button class="pill active" data-level="2">中级</button>
+        <button class="pill" data-level="3">高级</button>
+      </div>
+      <div class="pick-label">③ 场景</div>
+      <div class="pill-row" id="sceneRow">
+        <button class="pill active" data-scene="daily">日常生活</button>
+        <button class="pill" data-scene="travel">旅行</button>
+        <button class="pill" data-scene="business">商务</button>
+        <button class="pill" data-scene="campus">校园</button>
+      </div>
+      <div class="start-row">
+        <button class="btn-primary big" id="startBtn">开始练习 · 10 句</button>
+      </div>
+      <p class="tip" id="voiceTip">提示：语音口译建议使用 Chrome 或 Edge 浏览器，并允许麦克风权限。</p>
+    </div>
+    <div class="stats-row" id="homeStats"></div>
+  </section>
+
+  <!-- 练习页 -->
+  <section id="view-practice" class="view hidden">
+    <div class="p-top">
+      <div class="p-meta" id="practiceMeta"></div>
+      <div class="p-count" id="practiceCount"></div>
+      <button class="btn-ghost small" id="exitBtn">退出</button>
+    </div>
+    <div class="p-progress"><div class="p-progress-in" id="progressBar"></div></div>
+
+    <div class="card src-card">
+      <div class="src-label" id="srcLabel">原句</div>
+      <div class="src-text" id="srcText"></div>
+      <div class="src-actions">
+        <button class="btn-hear hidden" id="speakBtn">▷ 朗读原句</button>
+      </div>
+    </div>
+
+    <div class="card input-card" id="inputCard">
+      <div class="mic-area" id="micArea">
+        <button class="mic-btn" id="micBtn" aria-label="开始口译">
+          <svg viewBox="0 0 24 24" width="26" height="26"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M6 11a6 6 0 0 0 12 0" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M12 17v4" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <div class="mic-hint" id="micHint">点击开始口译，说完自动结束</div>
+        <button class="btn-ghost small" id="modeBtn">切换打字输入</button>
+      </div>
+      <div class="answer-area">
+        <label class="ans-label" for="answerInput">你的翻译（识别结果可手动修正）</label>
+        <textarea id="answerInput" rows="3" placeholder="对着麦克风说出来，或直接在这里打字"></textarea>
+      </div>
+      <button class="btn-primary big" id="submitBtn" disabled>请 AI 教练讲评</button>
+    </div>
+
+    <div class="loading hidden" id="loadingCard"><span class="spinner"></span>AI 教练正在讲评……</div>
+
+    <div class="card error-card hidden" id="errorCard">
+      <div class="err-msg" id="errorMsg"></div>
+      <button class="btn-primary" id="retryBtn">重试讲评</button>
+    </div>
+
+    <div class="card feedback-card hidden" id="feedbackCard">
+      <div class="fb-head">
+        <span class="fb-badge">AI 讲评</span>
+        <span class="fb-verdict" id="fbVerdict"></span>
+      </div>
+      <div id="fbBody"></div>
+      <div class="ref-box">
+        <div class="ref-label">参考译文</div>
+        <div class="ref-text" id="refText"></div>
+        <button class="btn-hear" id="refSpeakBtn">▷ 朗读</button>
+        <div class="hint-text hidden" id="speechHint"></div>
+      </div>
+      <button class="btn-primary big" id="nextBtn">下一句</button>
+    </div>
+  </section>
+
+  <!-- 报告页 -->
+  <section id="view-report" class="view hidden">
+    <div class="hero small">
+      <h1>本轮练习回顾</h1>
+      <p id="reportMeta"></p>
+    </div>
+    <div id="reportList"></div>
+    <div class="action-row">
+      <button class="btn-primary big" id="againBtn">再来一轮</button>
+      <button class="btn-ghost" id="backHomeBtn">返回首页</button>
+    </div>
+  </section>
+
+  <!-- 历史页 -->
+  <section id="view-history" class="view hidden">
+    <div class="hero small">
+      <h1>练习日志</h1>
+      <p>记录保存在本浏览器里，换设备不会同步。</p>
+    </div>
+    <div class="stats-row" id="historyStats"></div>
+    <div id="historyList"></div>
+    <div class="action-row">
+      <button class="btn-danger" id="clearBtn">清空全部记录</button>
+      <button class="btn-ghost" id="backHomeBtn2">返回首页</button>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">日译训练场 · 坚持每天十句，翻译自然开口成章</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
+<script src="js/cloud-config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
