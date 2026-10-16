@@ -21,6 +21,11 @@
 - 振假名：`app.js` 的 `furiToHtml()` 把 `{汉字|读音}` → `<ruby>`；只在显示层注音，朗读和 AI 讲评仍用纯文本
 - TTS 踩坑：设备缺对应语种语音包时，`speechSynthesis.speak()` 会**静默失败**（不发声也不报错），用户感受就是"点了没反应"。必须自己用 `getVoices()` 检测并给出可见提示（含各系统安装语音包指引），不能只调 speak()
 - 改完本地代码**不会自动同步到线上**，需重新发布（会覆盖线上现有内容），且每轮都要用户明确同意
+- **AI 讲评与本地比对并存**（v4 起）：提交后本地 LCS 比对立即呈现（离线可用），
+  AI 讲评异步补上；讲评结果并入记录供报告页/历史页回看；用自增 `aiToken` 丢弃过期讲评。
+  AI 失败时只显示可重试提示，不影响本地比对结果
+- **删功能时容易连带删共用样式/节点**：删 AI 讲评那次连带删了 `.fb-li`（good/sug）。
+  恢复或重构后要跑一遍 DOM id（`$()` 引用）与 class 的双向一致性检查
 - 本会话跑 git 远程命令**必须绕开代理**，最稳写法（env 清空 + git 配置层面再清一次）：
   `http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= all_proxy= git -c http.proxy= -c https.proxy= push`
   只清 env 有时仍会被代理拦截；GitHub 连接还会间歇性 `Connection was reset`，失败重试即可
