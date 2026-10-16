@@ -21,6 +21,14 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+
+  // 把题库的 {汉字|读音} 标记转成 <ruby>振假名</ruby>
+  function furiToHtml(s) {
+    if (!s) return '';
+    return esc(s).replace(/\{([^{}|]+)\|([^{}|]+)\}/g, function (_, w, r) {
+      return '<ruby>' + w + '<rt>' + r + '</rt></ruby>';
+    });
+  }
   function show(el) { el.classList.remove('hidden'); }
   function hide(el) { el.classList.add('hidden'); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -398,7 +406,7 @@
 
   function renderFeedback(f, call) {
     state.results.push({
-      src: call.source, ref: call.reference, user: call.userText,
+      src: call.source, ref: call.reference, refFuri: call.refFuri, user: call.userText,
       verdict: f.verdict || '已完成这句的讲评。',
       highlights: f.highlights, suggestions: f.suggestions
     });
@@ -419,7 +427,10 @@
     }
     $('fbBody').innerHTML = html;
 
-    $('refText').textContent = call.reference;
+    // 中→日方向：参考译文用振假名渲染；日→中方向：中文直接显示
+    $('refText').innerHTML = (call.dir === 'zh2ja' && call.refFuri)
+      ? furiToHtml(call.refFuri)
+      : esc(call.reference);
     show($('feedbackCard'));
     $('nextBtn').textContent = state.idx + 1 >= state.queue.length ? '查看本轮回顾' : '下一句';
     window.scrollTo(0, 0);
@@ -451,7 +462,8 @@
         '<span class="rpt-badge">' + esc(it.verdict) + '</span>' +
         '</div><div class="rpt-body">' +
         '<div class="rpt-row"><span>你的翻译</span><p>' + esc(it.user) + '</p></div>' +
-        '<div class="rpt-row ref"><span>参考译文</span><p>' + esc(it.ref) + '</p></div>' +
+        '<div class="rpt-row ref"><span>参考译文</span><p>' +
+        (rec.dir === 'zh2ja' && it.refFuri ? furiToHtml(it.refFuri) : esc(it.ref)) + '</p></div>' +
         (it.suggestions.length ? '<div class="rpt-row"><span>教练建议</span><p>' + esc(it.suggestions.join('；')) + '</p></div>' : '') +
         '</div></div>';
     });
@@ -598,6 +610,7 @@
       dir: state.dir,
       source: currentSrc(s),
       reference: currentRef(s),
+      refFuri: s.furi,          // 日语原文的注音标记版（用于振假名渲染）
       userText: userText
     };
     $('answerInput').readOnly = true;

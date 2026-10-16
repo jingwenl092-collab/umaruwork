@@ -197,7 +197,11 @@ button { font-family: inherit; cursor: pointer; }
 .fb-li.sug::before { content: "→"; position: absolute; left: 4px; color: var(--warn); font-weight: 700; }
 .ref-box { margin-top: 14px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-s); padding: 13px 15px; }
 .ref-label { font-size: 12px; color: var(--faint); }
-.ref-text { font-size: 17px; font-weight: 600; margin: 4px 0 10px; color: var(--text); }
+.ref-text { font-size: 17px; font-weight: 600; margin: 4px 0 10px; color: var(--text); line-height: 2.3; }
+/* 振假名（汉字注音） */
+.ref-text rt, .rpt-row.ref p rt {
+  font-size: 10px; font-weight: 400; color: var(--faint); letter-spacing: 0;
+}
 .hint-text {
   margin-top: 10px; font-size: 12.5px; line-height: 1.65; color: var(--warn);
   background: var(--warn-soft); border-radius: 8px; padding: 8px 11px;
@@ -226,7 +230,7 @@ button { font-family: inherit; cursor: pointer; }
 .rpt-row { margin-top: 10px; }
 .rpt-row > span { font-size: 12px; color: var(--faint); }
 .rpt-row p { margin: 3px 0 0; font-size: 15px; color: var(--text); }
-.rpt-row.ref p { font-weight: 600; }
+.rpt-row.ref p { font-weight: 600; line-height: 2.2; }
 .rpt-sent { padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
 .rpt-sent:last-child { border-bottom: none; }
 .rpt-sent b { color: var(--accent-deep); font-size: 12.5px; margin-right: 6px; }
