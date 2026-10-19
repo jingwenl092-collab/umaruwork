@@ -339,23 +339,24 @@
     }, 300);
   }
 
+  // 选语音：优先本地语音（localService），远端/网络语音在离线或权限受限时会静默失败
   function pickVoice(lang) {
     refreshVoices();
     if (!speechVoices.length) return null;
     var want = String(lang || '').toLowerCase();
-    var i, v, l;
-    for (i = 0; i < speechVoices.length; i++) {
-      v = speechVoices[i];
-      l = String(v.lang || '').toLowerCase().replace('_', '-');
-      if (l === want) return v;
-    }
     var head = want.split('-')[0];
+    var i, v, l, exact = null, localExact = null, loose = null;
     for (i = 0; i < speechVoices.length; i++) {
       v = speechVoices[i];
       l = String(v.lang || '').toLowerCase().replace('_', '-');
-      if (l.indexOf(head) === 0) return v;
+      if (l === want) {
+        if (!exact) exact = v;
+        if (v.localService !== false) { localExact = v; break; }
+      } else if (!loose && l.indexOf(head) === 0 && v.localService !== false) {
+        loose = v;
+      }
     }
-    return null;
+    return localExact || exact || loose;
   }
 
   function clearSpeechHint() {
@@ -369,9 +370,10 @@
     var el = $(targetId || 'speechHint');
     if (!el) return;
     var isJa = String(lang || '').toLowerCase().indexOf('ja') === 0;
-    el.textContent = isJa
-      ? '听不到声音？这台设备可能缺少日语语音包。Windows：设置 → 时间和语言 → 语言和区域 → 添加语言「日本語」并勾选「语音」；装好后刷新页面再试。'
-      : '听不到声音？请在系统语言设置里安装中文语音包，装好后刷新页面再试。';
+    el.textContent = (isJa
+      ? '听不到声音？这台设备可能缺少日语语音包。Windows：设置 → 时间和语言 → 语言和区域 → 添加语言「日本語」并勾选「语音」；'
+      : '听不到声音？请在系统语言设置里安装中文语音包；') +
+      '若语音包已装好仍无声，多半是浏览器语音引擎被卡住了——先刷新页面，再检查系统音量、输出设备与 Chrome 的站点声音权限，或换 Chrome / Edge 再试。';
     show(el);
   }
 
@@ -385,36 +387,67 @@
     }
   }
 
-  function doSpeak(text, lang, btn, onDone, hintId) {
+  // 静默失败看门狗：Chrome 常见「speak() 既不发声也不报错」，
+  // 只靠 onerror 抓不到，必须自己盯 onstart 有没有来
+  var TTS_WATCH_MS = 1200;
+  var TTS_RETRY_GAP = 260;
+
+  // retry=true 表示第二次尝试：不再指定 voice，交给浏览器自己挑默认语音
+  function doSpeak(text, lang, btn, onDone, hintId, retry) {
     var synth = window.speechSynthesis;
     var u = new SpeechSynthesisUtterance(text);
     u.lang = lang;
     u.rate = 0.95;
     u.pitch = 1;
+    u.volume = 1;
 
     var v = pickVoice(lang);
-    if (v) u.voice = v;
+    if (v && !retry) u.voice = v;
 
-    if (speechVoices.length && !v) {
+    if (!retry && speechVoices.length && !v) {
       showSpeechHint(lang, hintId);
       if (onDone) onDone();
       return;
     }
 
+    var started = false;
     var finished = false;
+    var watch = null;
+
     function finishOnce() {
       if (finished) return;
       finished = true;
+      if (watch) clearTimeout(watch);
       setSpeakLabel(btn, false);
       if (onDone) onDone();
     }
 
-    u.onstart = function () { setSpeakLabel(btn, true); };
+    // 卡住或报错时：先取消再重试一次（换默认语音）。
+    // 「静默失败」要立刻把提示摆出来，别让用户对着按钮干等
+    function fallback(reason) {
+      if (finished || started) return;
+      if (watch) clearTimeout(watch);
+      if (reason === 'silent') showSpeechHint(lang, hintId);
+      if (retry) {
+        showSpeechHint(lang, hintId);
+        finishOnce();
+        return;
+      }
+      try { synth.cancel(); } catch (err) {}
+      setTimeout(function () {
+        if (finished) return;
+        doSpeak(text, lang, btn, onDone, hintId, true);
+      }, TTS_RETRY_GAP);
+    }
+
+    u.onstart = function () { started = true; setSpeakLabel(btn, true); };
     u.onend = finishOnce;
-    u.onerror = function () {
-      showSpeechHint(lang, hintId);
-      finishOnce();
-    };
+    u.onerror = function () { fallback('error'); };
+
+    watch = setTimeout(function () {
+      if (started || finished) return;
+      if (!synth.speaking && !synth.pending) fallback('silent');
+    }, TTS_WATCH_MS);
 
     try { synth.resume(); } catch (err) {}
     try { synth.speak(u); } catch (err) {
@@ -422,15 +455,10 @@
       finishOnce();
       return;
     }
-
-    if (!v) {
-      setTimeout(function () {
-        if (!synth.speaking && !synth.pending) {
-          showSpeechHint(lang, hintId);
-          finishOnce();
-        }
-      }, 1200);
-    }
+    // Chrome 已知问题：resume() 在 speak() 之后还要再调一次，队列才会启动
+    setTimeout(function () {
+      try { if (synth.paused) synth.resume(); } catch (err) {}
+    }, 80);
   }
 
   function speak(text, lang, btn, onDone, hintId) {
@@ -443,7 +471,8 @@
     try {
       if (synth.speaking || synth.pending) {
         synth.cancel();
-        setTimeout(function () { doSpeak(text, lang, btn, onDone, hintId); }, 180);
+        // 取消后要等引擎真正清空再 speak，否则 Chrome 会把新的一条吞掉
+        setTimeout(function () { doSpeak(text, lang, btn, onDone, hintId); }, TTS_RETRY_GAP);
       } else {
         doSpeak(text, lang, btn, onDone, hintId);
       }
@@ -451,6 +480,60 @@
       showSpeechHint(lang, hintId);
       if (onDone) onDone();
     }
+  }
+
+  // 朗读自检：把「为什么没声音」直接摆在页面上，省得用户瞎猜
+  function ttsSelfCheck(targetId) {
+    var out = $(targetId || 'ttsResult');
+    if (!out) return;
+    show(out);
+
+    if (!('speechSynthesis' in window)) {
+      out.textContent = '❌ 这个浏览器不支持语音合成，请改用 Chrome 或 Edge。';
+      return;
+    }
+    refreshVoices();
+    var ja = pickVoice('ja-JP');
+    var zh = pickVoice('zh-CN');
+    var info = '可用语音 ' + speechVoices.length + ' 个' +
+      '；日语：' + (ja ? ja.name : '未找到') +
+      '；中文：' + (zh ? zh.name : '未找到');
+
+    var synth = window.speechSynthesis;
+    try { synth.cancel(); } catch (e) {}
+    out.textContent = '🔊 正在试听「こんにちは」…（' + info + '）';
+
+    var settled = false;
+    var u = new SpeechSynthesisUtterance('こんにちは');
+    u.lang = 'ja-JP';
+    u.volume = 1;
+    if (ja) u.voice = ja;
+
+    var timer = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      out.textContent = '⚠️ ' + info + '。试听 2 秒内没有开始发声——浏览器语音引擎可能被卡住了：' +
+        '先刷新页面再试；仍不行请检查系统音量与默认输出设备、Chrome 的站点声音是否被静音，或换 Chrome / Edge。';
+    }, 2000);
+
+    u.onstart = function () {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      out.textContent = '✅ 已经发声，朗读正常。' + info + '。';
+    };
+    u.onerror = function () {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      out.textContent = '❌ 发声失败。' + info + '。请检查系统是否安装日语语音包（Windows：设置 → 时间和语言 → 语言和区域 → 添加「日本語」并勾选语音）。';
+    };
+
+    setTimeout(function () {
+      try { synth.resume(); } catch (e) {}
+      try { synth.speak(u); } catch (e) {}
+      setTimeout(function () { try { if (synth.paused) synth.resume(); } catch (e) {} }, 80);
+    }, 150);
   }
 
   // ---------- 限时反应倒计时 ----------
@@ -1470,6 +1553,10 @@
       renderReadingList();
     });
   });
+
+  // ---------- 朗读自检 ----------
+  $('ttsCheckBtn').addEventListener('click', function () { ttsSelfCheck('ttsResult'); });
+  $('readTtsBtn').addEventListener('click', function () { ttsSelfCheck('readSpeechHint'); });
 
   // ---------- 对话模块事件 ----------
   function goTalk() {

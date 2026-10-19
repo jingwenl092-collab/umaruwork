@@ -59,6 +59,10 @@
         <button class="btn-primary big" id="startBtn">开始练习 · 10 句</button>
       </div>
       <p class="tip" id="voiceTip">提示：语音口译与自动朗读建议使用 Chrome 或 Edge 浏览器，并允许麦克风权限。</p>
+      <div class="tts-check">
+        <button class="btn-ghost small" id="ttsCheckBtn">🔊 朗读自检</button>
+        <span class="tts-result hidden" id="ttsResult"></span>
+      </div>
     </div>
     <div class="stats-row" id="homeStats"></div>
 
@@ -192,6 +196,7 @@
         <div class="read-toolbar">
           <button class="btn-hear" id="readSpeakAllBtn">▷ 朗读全文</button>
           <button class="btn-ghost small" id="readToggleZhBtn">显示中文对照</button>
+          <button class="btn-ghost small" id="readTtsBtn">🔊 自检</button>
         </div>
         <div class="hint-text hidden" id="readSpeechHint"></div>
 
