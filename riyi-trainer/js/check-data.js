@@ -125,7 +125,7 @@ R.forEach(function (a, i) {
 var T = window.TALK || { levels: {}, scenes: [] };
 var seenScene = {};
 // 角色设定为「虚构通用成员」，素材里不允许出现真实团体名/人名
-var BANNED = /AKB|SKE|NMB|HKT|NGT|STU|=LOVE|イコラブ|指原|秋元|48グループ|乃木坂|櫻坂|日向坂/;
+var BANNED = /AKB|SKE|NMB|HKT|NGT|STU|=LOVE|イコラブ|指原|秋元|48グループ|乃木坂|櫻坂|日向坂|大西|姫奈|プロデューサー/;
 
 [1, 2, 3].forEach(function (lv) {
   var info = T.levels[lv];
