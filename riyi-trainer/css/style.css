@@ -276,6 +276,188 @@ button { font-family: inherit; cursor: pointer; }
 .rpt-v { margin: 3px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
 .empty { text-align: center; color: var(--muted); font-size: 15px; }
 
+/* ---- 首页入口卡片 ---- */
+.entry-row { margin-top: 14px; }
+.entry-item { display: flex; flex-direction: column; gap: 4px; }
+.entry-item b { font-size: 15.5px; color: var(--accent-ink); }
+.entry-item span { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.entry-item .btn-primary { margin-top: 8px; width: 140px; }
+.entry-item + .entry-item { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
+
+/* ---- 阅读：筛选 ---- */
+.read-filter { display: flex; align-items: center; gap: 12px; margin: 12px 2px 6px; flex-wrap: wrap; }
+.rf-label { font-size: 12.5px; color: var(--faint); flex: none; }
+
+/* ---- 阅读：文章列表 ---- */
+.read-item { cursor: pointer; transition: border-color .15s, transform .15s; }
+.read-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+.ri-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ri-cat {
+  font-size: 12px; color: var(--accent-ink); background: var(--accent-soft);
+  padding: 2px 10px; border-radius: 999px;
+}
+.ri-lv { font-size: 12px; color: var(--muted); }
+.ri-title { margin: 4px 0 3px; font-size: 18px; line-height: 2.2; color: var(--text); font-weight: 700; }
+.ri-zh { margin: 0 0 6px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+.ri-foot { margin: 0; font-size: 12px; color: var(--faint); }
+
+/* ---- 阅读：正文 ---- */
+.read-top { display: flex; align-items: center; gap: 12px; margin: 14px 2px 10px; flex-wrap: wrap; }
+.read-top-meta { font-size: 12.5px; color: var(--faint); }
+.read-card { padding: 18px 20px; }
+.read-title { margin: 0 0 4px; font-size: 21px; line-height: 2.2; color: var(--accent-ink); font-weight: 700; }
+.read-subtitle { margin: 0 0 14px; font-size: 14.5px; color: var(--muted); line-height: 1.6; }
+.read-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.small-hear { padding: 3px 9px; font-size: 12px; }
+
+.read-para { padding: 12px 0; border-top: 1px dashed var(--line); }
+.read-para:first-child { border-top: none; }
+.rp-ja { font-size: 16.5px; line-height: 2.5; color: var(--text); }
+.rp-zh { margin: 6px 0 0; font-size: 13.5px; line-height: 1.75; color: var(--muted); }
+.read-para .btn-hear { margin-top: 6px; }
+
+.read-sec-t { margin: 0 0 10px; font-size: 15px; color: var(--accent-ink); }
+#readQuizCard { margin-top: 14px; }
+
+/* ---- 阅读：理解题 ---- */
+.qz-item { padding: 12px 0; border-top: 1px dashed var(--line); }
+.qz-item:first-child { border-top: none; }
+.qz-q { font-size: 14.5px; color: var(--text); line-height: 1.7; margin-bottom: 8px; }
+.qz-opts { display: flex; flex-direction: column; gap: 7px; }
+.qz-opt {
+  display: flex; align-items: flex-start; gap: 9px; width: 100%; text-align: left;
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius-s);
+  padding: 9px 12px; font-size: 15px; line-height: 2.1; color: var(--text);
+  cursor: pointer; transition: border-color .15s, background .15s;
+}
+.qz-opt:hover { border-color: var(--accent); }
+.qz-opt.on { background: var(--accent-soft); border-color: var(--accent); }
+.qz-n {
+  flex: none; width: 19px; height: 19px; border-radius: 50%; margin-top: 5px;
+  background: var(--card-soft); color: var(--muted); font-size: 11.5px;
+  display: flex; align-items: center; justify-content: center; font-weight: 700;
+}
+.qz-opt.on .qz-n { background: var(--accent); color: #fff; }
+.qz-exp {
+  margin-top: 8px; font-size: 13px; line-height: 1.75; padding: 9px 12px; border-radius: 8px;
+}
+.qz-exp.ok { background: var(--accent-soft); color: var(--accent-ink); }
+.qz-exp.no { background: var(--warn-soft); color: var(--text); }
+
+.read-result {
+  margin-top: 14px; padding: 11px 14px; border-radius: var(--radius-s);
+  font-size: 14.5px; line-height: 1.7;
+}
+.read-result.good { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.read-result.warn { background: var(--warn-soft); color: var(--text); }
+
+/* 阅读区的振假名 */
+.ri-title rt, .read-title rt, .rp-ja rt, .qz-opt rt {
+  font-size: 10.5px; font-weight: 400; color: var(--faint); letter-spacing: 0;
+}
+
+/* ---- 对话：场景设置 ---- */
+.talk-scene-row .dir-btn { text-align: left; padding: 12px 14px; }
+.talk-scene-row .dir-btn b { font-size: 15px; }
+.talk-scene-row .dir-btn span { font-size: 12px; line-height: 1.5; }
+.talk-brief { margin-top: 18px; border-top: 1px dashed var(--line); padding-top: 4px; }
+.tb-sec { margin-top: 12px; }
+.tb-t { font-size: 12.5px; color: var(--accent); font-weight: 700; margin-bottom: 6px; letter-spacing: .3px; }
+.tb-p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.8; }
+.tb-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; line-height: 1.9; }
+.tb-phrase { padding: 8px 0; border-top: 1px dashed var(--line); }
+.tb-phrase:first-of-type { border-top: none; }
+.tb-ja { font-size: 16px; color: var(--text); line-height: 2.1; }
+.tb-zh { font-size: 13px; color: var(--faint); }
+.tb-ja rt, .th-ja rt, .cb-ja rt { font-size: 10.5px; font-weight: 400; color: var(--faint); }
+
+/* 对话历史 */
+.tk-recent { border-top: 1px dashed var(--line); padding: 9px 0; }
+.tk-recent:first-of-type { border-top: none; }
+.tk-recent summary { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13.5px; list-style: none; }
+.tk-recent summary::-webkit-details-marker { display: none; }
+.tk-date { color: var(--faint); font-size: 12.5px; }
+.tk-name { color: var(--accent-ink); font-weight: 600; }
+.tk-n { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+.tk-detail { margin: 8px 0 2px; padding: 8px 10px; background: var(--card-soft); border-radius: 10px; }
+.tk-line { display: flex; gap: 8px; font-size: 13.5px; line-height: 1.8; color: var(--text); }
+.tk-line b { flex: none; color: var(--faint); font-weight: 600; font-size: 12px; width: 32px; }
+.tk-line.me span { color: var(--accent-deep); }
+.tk-line.fb span { color: var(--muted); }
+
+/* ---- 对话：聊天 ---- */
+.talk-card { padding: 14px 14px 12px; }
+.chat-log { max-height: 60vh; overflow-y: auto; padding: 4px 4px 8px; display: flex; flex-direction: column; gap: 12px; }
+.chat-row { display: flex; gap: 9px; align-items: flex-start; }
+.chat-row.me { justify-content: flex-end; }
+.chat-ava {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; margin-top: 2px;
+  background: var(--accent-soft); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.chat-col { max-width: 84%; display: flex; flex-direction: column; gap: 6px; }
+.chat-row.me .chat-col { align-items: flex-end; }
+.chat-bubble { padding: 10px 14px; border-radius: 14px; font-size: 15px; line-height: 1.8; }
+.chat-bubble.ai { background: var(--card-soft); border: 1px solid var(--line); border-top-left-radius: 4px; }
+.chat-bubble.me { background: var(--accent); color: #fff; border-top-right-radius: 4px; }
+.cb-ja { font-size: 16.5px; color: var(--text); line-height: 2.2; }
+.cb-zh {
+  margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--line);
+  font-size: 13px; color: var(--muted); line-height: 1.7;
+}
+.cb-tools { display: flex; gap: 14px; margin-top: 6px; }
+.cb-tool { border: none; background: transparent; color: var(--accent); font-size: 12.5px; padding: 0; }
+.cb-tool:hover { color: var(--accent-deep); text-decoration: underline; }
+
+/* 每轮即时点评 */
+.talk-fb {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 12px; font-size: 13.5px; line-height: 1.75;
+}
+.tfb-v { font-weight: 700; color: var(--accent-ink); font-size: 14px; }
+.tfb-li { margin-top: 4px; }
+.tfb-li.good { color: var(--accent-deep); }
+.tfb-li.sug { color: var(--text); }
+.tfb-next {
+  margin-top: 6px; padding-top: 5px; border-top: 1px dashed var(--line);
+  color: var(--muted); font-size: 12.5px;
+}
+.talk-fb.loading { color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.talk-fb.err { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tfb-err { color: var(--danger); flex: 1; min-width: 140px; }
+.chat-bubble.typing { display: flex; gap: 5px; align-items: center; padding: 15px 16px; }
+.tdot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); animation: tdot 1.1s infinite; }
+.tdot:nth-child(2) { animation-delay: .18s; }
+.tdot:nth-child(3) { animation-delay: .36s; }
+@keyframes tdot {
+  0%, 60%, 100% { opacity: .25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* 输入区 */
+.chat-input { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.chat-input textarea {
+  width: 100%; border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 12px; font-family: inherit; font-size: 15px; line-height: 1.7;
+  color: var(--text); background: var(--card-soft); resize: vertical;
+}
+.chat-input textarea:focus { outline: none; border-color: var(--accent); background: #fff; }
+.chat-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+.chat-actions .btn-primary { margin-left: auto; padding: 8px 24px; }
+.talk-hintbox {
+  margin-top: 10px; background: var(--card-soft); border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 12px;
+}
+.th-t { font-size: 12px; color: var(--faint); margin-bottom: 6px; }
+.th-item {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left;
+  border: none; background: transparent; padding: 7px 4px; border-top: 1px dashed var(--line);
+}
+.th-item:first-of-type { border-top: none; }
+.th-item:hover { background: var(--accent-soft); border-radius: 8px; }
+.th-ja { font-size: 15px; color: var(--text); line-height: 2; }
+.th-zh { font-size: 12.5px; color: var(--faint); }
+
 /* ---- 页脚 ---- */
 .foot { text-align: center; padding: 26px 20px 40px; color: var(--faint); font-size: 13px; }
 
@@ -286,4 +468,7 @@ button { font-family: inherit; cursor: pointer; }
   .metric .m-num { font-size: 19px; }
   .rpt-badge { max-width: 100%; }
   .src-text { font-size: 19px; }
+  .topnav { gap: 2px; }
+  .navlink { padding: 7px 8px; font-size: 13px; }
+  .chat-col { max-width: 88%; }
 }

@@ -14,6 +14,8 @@
     <div class="logo" id="logoBtn"><span class="logo-mark"></span>日译训练场</div>
     <nav class="topnav">
       <button class="navlink" id="navHome">首页</button>
+      <button class="navlink" id="navReading">阅读</button>
+      <button class="navlink" id="navTalk">对话</button>
       <button class="navlink" id="navHistory">练习日志</button>
     </nav>
   </div>
@@ -59,6 +61,19 @@
       <p class="tip" id="voiceTip">提示：语音口译与自动朗读建议使用 Chrome 或 Edge 浏览器，并允许麦克风权限。</p>
     </div>
     <div class="stats-row" id="homeStats"></div>
+
+    <div class="card pick-card entry-row">
+      <div class="entry-item">
+        <b>📖 阅读练习</b>
+        <span>やさしい日本語の記事，带注音与全文朗读，读完做理解题</span>
+        <button class="btn-primary" id="homeReadBtn">进入阅读</button>
+      </div>
+      <div class="entry-item">
+        <b>💬 偶像活动对话</b>
+        <span>握手会 / 击掌会 / 生日祭 / 发行纪念，和 AI 成员用日语现场聊，每句即时点评</span>
+        <button class="btn-primary" id="homeTalkBtn">进入对话</button>
+      </div>
+    </div>
   </section>
 
   <!-- 练习页 -->
@@ -131,6 +146,126 @@
     </div>
   </section>
 
+  <!-- 阅读页：列表 + 正文阅读器（两者在同一视图内切换） -->
+  <section id="view-reading" class="view hidden">
+    <!-- ① 文章列表 -->
+    <div id="readListPane">
+      <div class="hero small">
+        <h1>阅读练习</h1>
+        <p>やさしい日本語の記事。先通读全文，再做读后理解题。</p>
+      </div>
+
+      <div class="read-filter">
+        <span class="rf-label">分类</span>
+        <div class="pill-row" id="readCatRow">
+          <button class="pill active" data-cat="all">全部</button>
+          <button class="pill" data-cat="社会">社会</button>
+          <button class="pill" data-cat="科学">科学</button>
+          <button class="pill" data-cat="文化">文化</button>
+          <button class="pill" data-cat="生活">生活</button>
+        </div>
+      </div>
+      <div class="read-filter">
+        <span class="rf-label">难度</span>
+        <div class="pill-row" id="readLevelRow">
+          <button class="pill active" data-lv="0">全部</button>
+          <button class="pill" data-lv="1">初级</button>
+          <button class="pill" data-lv="2">中级</button>
+          <button class="pill" data-lv="3">高级</button>
+        </div>
+      </div>
+
+      <div id="readList"></div>
+    </div>
+
+    <!-- ② 正文阅读器 -->
+    <div id="readArticlePane" class="hidden">
+      <div class="read-top">
+        <button class="btn-ghost small" id="readBackBtn">← 返回列表</button>
+        <span class="read-top-meta" id="readMeta"></span>
+      </div>
+
+      <div class="card read-card">
+        <h2 class="read-title" id="readTitleJa"></h2>
+        <p class="read-subtitle" id="readTitleZh"></p>
+
+        <div class="read-toolbar">
+          <button class="btn-hear" id="readSpeakAllBtn">▷ 朗读全文</button>
+          <button class="btn-ghost small" id="readToggleZhBtn">显示中文对照</button>
+        </div>
+        <div class="hint-text hidden" id="readSpeechHint"></div>
+
+        <div id="readBody"></div>
+      </div>
+
+      <div class="card read-card" id="readQuizCard">
+        <h3 class="read-sec-t">读后理解</h3>
+        <div id="readQuiz"></div>
+        <div class="read-result hidden" id="readResult"></div>
+        <div class="action-row">
+          <button class="btn-primary" id="readSubmitBtn">提交答案</button>
+          <button class="btn-ghost" id="readRetryBtn">重做</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 对话页：场景设置 + 聊天（同一视图内切换） -->
+  <section id="view-talk" class="view hidden">
+    <!-- ① 场景设置 -->
+    <div id="talkSetupPane">
+      <div class="hero small">
+        <h1>偶像活动对话</h1>
+        <p>AI 扮演一位不具名的现役成员，用日语陪你在活动现场聊天。每说一句，立刻收到点评和更地道的说法。</p>
+      </div>
+
+      <div class="card pick-card">
+        <div class="pick-label">① 场景</div>
+        <div class="dir-row talk-scene-row" id="talkSceneRow"></div>
+
+        <div class="pick-label">② 难度</div>
+        <div class="pill-row" id="talkLevelRow">
+          <button class="pill" data-lv="1">初级</button>
+          <button class="pill active" data-lv="2">中级</button>
+          <button class="pill" data-lv="3">高级</button>
+        </div>
+        <p class="tip" id="talkLevelTip"></p>
+
+        <div class="talk-brief" id="talkBrief"></div>
+
+        <div class="start-row">
+          <button class="btn-primary big" id="talkStartBtn">开始对话</button>
+        </div>
+        <p class="tip">提示：成员发言会自动朗读；说日语时可用语音输入。AI 扮演的是虚构的通用成员，不对应任何真实人物或团体。</p>
+      </div>
+
+      <div id="talkRecentCard"></div>
+    </div>
+
+    <!-- ② 聊天 -->
+    <div id="talkChatPane" class="hidden">
+      <div class="p-top">
+        <div class="p-meta" id="talkMeta"></div>
+        <button class="btn-ghost small" id="talkEndBtn">结束对话</button>
+      </div>
+
+      <div class="card talk-card">
+        <div class="chat-log" id="talkLog"></div>
+
+        <div class="chat-input" id="talkInputBox">
+          <textarea id="talkInput" rows="2" placeholder="用日语回一句（说不出口就先打出来）"></textarea>
+          <div class="chat-actions">
+            <button class="btn-ghost small" id="talkMicBtn">🎤 语音输入</button>
+            <button class="btn-ghost small" id="talkHintBtn">💡 提示说法</button>
+            <button class="btn-primary" id="talkSendBtn" disabled>发送</button>
+          </div>
+          <div class="hint-text hidden" id="talkSpeechHint"></div>
+          <div class="talk-hintbox hidden" id="talkHintBox"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- 报告页 -->
   <section id="view-report" class="view hidden">
     <div class="hero small">
@@ -168,6 +303,8 @@
 <script src="js/data-travel.js"></script>
 <script src="js/data-business.js"></script>
 <script src="js/data-campus.js"></script>
+<script src="js/data-reading.js"></script>
+<script src="js/data-talk.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 </body>

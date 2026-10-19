@@ -294,12 +294,14 @@
   // ---------- 视图切换 ----------
   var views = {
     home: $('view-home'), practice: $('view-practice'),
-    report: $('view-report'), history: $('view-history')
+    report: $('view-report'), history: $('view-history'),
+    reading: $('view-reading'), talk: $('view-talk')
   };
   function go(name) {
     aiToken++;   // 切换页面后，尚未返回的讲评一律作废
     stopTimer();
     stopRec();
+    stopTalkRec();
     if ('speechSynthesis' in window) {
       try { window.speechSynthesis.cancel(); } catch (e) {}
     }
@@ -357,7 +359,7 @@
   }
 
   function clearSpeechHint() {
-    ['speechHint', 'srcSpeechHint'].forEach(function (id) {
+    ['speechHint', 'srcSpeechHint', 'readSpeechHint', 'talkSpeechHint'].forEach(function (id) {
       var el = $(id);
       if (el) { el.textContent = ''; hide(el); }
     });
@@ -745,6 +747,470 @@
     });
   }
 
+  // ---------- 阅读模块 ----------
+  var READ = {
+    cat: 'all', lv: 0,
+    current: null,
+    showZh: false,
+    answers: [],
+    submitted: false
+  };
+
+  function readPool() {
+    return (window.READING || []).filter(function (a) {
+      if (READ.cat !== 'all' && a.cat !== READ.cat) return false;
+      if (READ.lv && a.level !== READ.lv) return false;
+      return true;
+    });
+  }
+
+  function readChars(a) {
+    return a.paras.reduce(function (n, p) { return n + p.ja.length; }, 0);
+  }
+
+  function renderReadingList() {
+    show($('readListPane'));
+    hide($('readArticlePane'));
+    var pool = readPool();
+    if (!pool.length) {
+      $('readList').innerHTML = '<div class="card empty">这个筛选条件下还没有文章。</div>';
+      return;
+    }
+    var html = '';
+    pool.forEach(function (a) {
+      html += '<div class="card read-item" data-id="' + a.id + '">' +
+        '<div class="ri-head">' +
+        '<span class="ri-cat">' + esc(a.cat) + '</span>' +
+        '<span class="ri-lv">' + LEVELS[a.level] + '</span>' +
+        '</div>' +
+        '<h3 class="ri-title">' + furiToHtml(a.jaTitleFuri) + '</h3>' +
+        '<p class="ri-zh">' + esc(a.zhTitle) + '</p>' +
+        '<p class="ri-foot">' + a.paras.length + ' 段 · 约 ' + readChars(a) + ' 字 · ' +
+        a.questions.length + ' 道理解题</p>' +
+        '</div>';
+    });
+    $('readList').innerHTML = html;
+  }
+
+  function renderReadBody() {
+    var a = READ.current;
+    var html = '';
+    a.paras.forEach(function (p, i) {
+      html += '<div class="read-para">' +
+        '<div class="rp-ja">' + furiToHtml(p.furi) + '</div>' +
+        '<p class="rp-zh' + (READ.showZh ? '' : ' hidden') + '">' + esc(p.zh) + '</p>' +
+        '<button class="btn-hear small-hear" data-para="' + i + '">▷ 朗读本段</button>' +
+        '</div>';
+    });
+    $('readBody').innerHTML = html;
+  }
+
+  function renderQuiz() {
+    var a = READ.current;
+    var html = '';
+    a.questions.forEach(function (q, qi) {
+      html += '<div class="qz-item"><div class="qz-q">' + (qi + 1) + '. ' + esc(q.q) + '</div>';
+      html += '<div class="qz-opts">';
+      q.options.forEach(function (o, oi) {
+        var on = READ.answers[qi] === oi ? ' on' : '';
+        html += '<button class="qz-opt' + on + '" data-q="' + qi + '" data-o="' + oi + '">' +
+          '<span class="qz-n">' + 'ABCD'[oi] + '</span>' + furiToHtml(o.furi) + '</button>';
+      });
+      html += '</div>';
+      if (READ.submitted) {
+        var ok = READ.answers[qi] === q.answer;
+        html += '<div class="qz-exp ' + (ok ? 'ok' : 'no') + '">' +
+          (ok ? '✓ 回答正确。' : (READ.answers[qi] == null ? '未作答。' : '✗ ') + '正确答案是 ' + 'ABCD'[q.answer] + '。') +
+          ' ' + esc(q.explain) + '</div>';
+      }
+      html += '</div>';
+    });
+    $('readQuiz').innerHTML = html;
+  }
+
+  function openArticle(id) {
+    var a = null;
+    (window.READING || []).forEach(function (x) { if (x.id === id) a = x; });
+    if (!a) return;
+    READ.current = a;
+    READ.showZh = false;
+    READ.answers = a.questions.map(function () { return null; });
+    READ.submitted = false;
+
+    clearSpeechHint();
+    $('readMeta').textContent = a.cat + ' · ' + LEVELS[a.level] + ' · 约 ' + readChars(a) + ' 字';
+    $('readTitleJa').innerHTML = furiToHtml(a.jaTitleFuri);
+    $('readTitleZh').textContent = a.zhTitle;
+    $('readToggleZhBtn').textContent = '显示中文对照';
+    hide($('readResult'));
+    $('readSubmitBtn').disabled = false;
+
+    renderReadBody();
+    renderQuiz();
+    hide($('readListPane'));
+    show($('readArticlePane'));
+    window.scrollTo(0, 0);
+  }
+
+  // 顺序朗读：一段读完自动接下一段
+  function speakSeq(paras, i, btn, done) {
+    if (i >= paras.length) { if (done) done(); return; }
+    speak(paras[i].ja, 'ja-JP', btn, function () {
+      speakSeq(paras, i + 1, btn, done);
+    }, 'readSpeechHint');
+  }
+
+  function submitQuiz() {
+    var a = READ.current;
+    if (!a) return;
+    READ.submitted = true;
+    var right = 0;
+    a.questions.forEach(function (q, qi) {
+      if (READ.answers[qi] === q.answer) right++;
+    });
+    var total = a.questions.length;
+    var msg = right === total
+      ? '全部答对！这篇文章你已经读懂了。'
+      : '答对 ' + right + ' / ' + total + ' 题。往下看每道题的解析，再回读一遍对应的段落。';
+    $('readResult').textContent = msg;
+    $('readResult').className = 'read-result ' + (right === total ? 'good' : 'warn');
+    show($('readResult'));
+    $('readSubmitBtn').disabled = true;
+    renderQuiz();
+  }
+
+  // ---------- 偶像活动对话 ----------
+  var TALK_KEY = 'riyi_talk_v1';
+  var TALK = {
+    sceneId: ((window.TALK && window.TALK.scenes[0]) || {}).id,
+    level: 2,
+    turns: [],
+    busy: false,
+    startedAt: 0,
+    token: 0          // 会话令牌：结束或重开后，迟到的回复直接丢弃
+  };
+
+  function talkScene() {
+    var found = null;
+    ((window.TALK && window.TALK.scenes) || []).forEach(function (x) {
+      if (x.id === TALK.sceneId) found = x;
+    });
+    return found || (window.TALK.scenes || [])[0];
+  }
+
+  function talkLevelInfo() {
+    return (window.TALK.levels || {})[TALK.level] || {};
+  }
+
+  function loadTalkLog() {
+    try { return JSON.parse(localStorage.getItem(TALK_KEY)) || []; }
+    catch (e) { return []; }
+  }
+
+  function renderTalkSetup() {
+    show($('talkSetupPane'));
+    hide($('talkChatPane'));
+
+    var html = '';
+    ((window.TALK && window.TALK.scenes) || []).forEach(function (s) {
+      var on = s.id === TALK.sceneId ? ' active' : '';
+      html += '<button class="dir-btn' + on + '" data-scene="' + s.id + '">' +
+        '<b>' + s.emoji + ' ' + esc(s.name) + '</b><span>' + esc(s.desc) + '</span></button>';
+    });
+    $('talkSceneRow').innerHTML = html;
+
+    var sc = talkScene();
+    if (sc) {
+      var et = sc.etiquette.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('');
+      var ph = sc.phrases.map(function (p) {
+        return '<div class="tb-phrase"><div class="tb-ja">' + furiToHtml(p.furi) + '</div>' +
+          '<div class="tb-zh">' + esc(p.zh) + '</div></div>';
+      }).join('');
+      $('talkBrief').innerHTML =
+        '<div class="tb-sec"><div class="tb-t">现场是什么样</div><p class="tb-p">' + esc(sc.briefing) + '</p></div>' +
+        '<div class="tb-sec"><div class="tb-t">礼貌与节奏</div><ul class="tb-list">' + et + '</ul></div>' +
+        '<div class="tb-sec"><div class="tb-t">开口就能用的说法</div>' + ph + '</div>';
+    }
+
+    $('talkLevelTip').textContent = '当前难度：' + (talkLevelInfo().hint || '');
+    renderTalkRecent();
+  }
+
+  function renderTalkRecent() {
+    var log = loadTalkLog();
+    if (!log.length) { $('talkRecentCard').innerHTML = ''; return; }
+    var html = '<div class="card"><div class="read-sec-t">最近的对话</div>';
+    log.slice(-4).reverse().forEach(function (s) {
+      var n = (s.turns || []).filter(function (t) { return !!t.user; }).length;
+      var body = (s.turns || []).map(function (t) {
+        return '<div class="tk-line"><b>成员</b><span>' + esc(t.ai && t.ai.ja || '') + '</span></div>' +
+          (t.user ? '<div class="tk-line me"><b>你</b><span>' + esc(t.user) + '</span></div>' : '') +
+          (t.fb && t.fb.verdict ? '<div class="tk-line fb"><b>点评</b><span>' + esc(t.fb.verdict) + '</span></div>' : '');
+      }).join('');
+      html += '<details class="tk-recent">' +
+        '<summary><span class="tk-date">' + fmtDate(s.ts) + '</span>' +
+        '<span class="tk-name">' + esc(s.sceneName) + ' · ' + LEVELS[s.level] + '</span>' +
+        '<span class="tk-n">' + n + ' 轮</span></summary>' +
+        '<div class="tk-detail">' + body + '</div>' +
+        '</details>';
+    });
+    html += '</div>';
+    $('talkRecentCard').innerHTML = html;
+  }
+
+  function renderTalkLog() {
+    var html = '';
+    TALK.turns.forEach(function (t, i) {
+      var ruby = TALK.level === 3 ? esc(t.ai.ja) : furiToHtml(t.ai.furi);
+      html += '<div class="chat-row ai">' +
+        '<div class="chat-ava">♡</div>' +
+        '<div class="chat-col">' +
+        '<div class="chat-bubble ai">' +
+        '<div class="cb-ja">' + ruby + '</div>' +
+        '<div class="cb-zh hidden">' + esc(t.ai.zh) + '</div>' +
+        '<div class="cb-tools">' +
+        '<button class="cb-tool" data-speak="' + i + '">▷ 听</button>' +
+        '<button class="cb-tool" data-zh="' + i + '">中文</button>' +
+        '</div></div></div></div>';
+
+      if (t.user) {
+        var fb = '';
+        if (t.pending) {
+          fb = '<div class="talk-fb loading"><span class="spinner"></span> 教练正在看你这句话…</div>';
+        } else if (t.error) {
+          fb = '<div class="talk-fb err"><span class="tfb-err">' + esc(t.error) + '</span>' +
+            '<button class="btn-ghost small" data-retry="' + i + '">重试</button></div>';
+        } else if (t.fb) {
+          fb = talkFbHtml(t.fb);
+        }
+        html += '<div class="chat-row me"><div class="chat-col">' +
+          '<div class="chat-bubble me">' + esc(t.user) + '</div>' + fb +
+          '</div></div>';
+      }
+    });
+    if (TALK.busy) {
+      html += '<div class="chat-row ai"><div class="chat-ava">♡</div>' +
+        '<div class="chat-col"><div class="chat-bubble ai typing">' +
+        '<span class="tdot"></span><span class="tdot"></span><span class="tdot"></span>' +
+        '</div></div></div>';
+    }
+    var box = $('talkLog');
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function talkFbHtml(f) {
+    var h = '<div class="talk-fb">';
+    if (f.verdict) h += '<div class="tfb-v">' + esc(f.verdict) + '</div>';
+    (f.highlights || []).forEach(function (x) {
+      h += '<div class="tfb-li good">✓ ' + esc(x) + '</div>';
+    });
+    (f.suggestions || []).forEach(function (x) {
+      h += '<div class="tfb-li sug">→ ' + esc(x) + '</div>';
+    });
+    if (f.next) h += '<div class="tfb-next">💡 ' + esc(f.next) + '</div>';
+    return h + '</div>';
+  }
+
+  function syncTalkSend() {
+    $('talkSendBtn').disabled = TALK.busy || !$('talkInput').value.trim();
+  }
+
+  function startTalk() {
+    var sc = talkScene();
+    if (!sc) return;
+    var pool = sc.openers[TALK.level] || sc.openers[2] || sc.openers[1] || [];
+    if (!pool.length) return;
+    var first = pool[Math.floor(Math.random() * pool.length)];
+
+    TALK.token++;
+    TALK.turns = [{ ai: first, user: null, fb: null }];
+    TALK.busy = false;
+    TALK.startedAt = Date.now();
+
+    clearSpeechHint();
+    hide($('talkHintBox'));
+    $('talkInput').value = '';
+    $('talkInput').readOnly = false;
+    syncTalkSend();
+    $('talkMeta').textContent = sc.emoji + ' ' + sc.zhName + ' · ' + LEVELS[TALK.level];
+    renderTalkLog();
+    hide($('talkSetupPane'));
+    show($('talkChatPane'));
+    window.scrollTo(0, 0);
+    speak(first.ja, 'ja-JP', null, null, 'talkSpeechHint');
+  }
+
+  function endTalk() {
+    var used = TALK.turns.filter(function (t) { return !!t.user; });
+    if (used.length) {
+      var sc = talkScene();
+      var log = loadTalkLog();
+      log.push({
+        ts: Date.now(),
+        sceneId: sc.id, sceneName: sc.zhName, level: TALK.level,
+        turns: TALK.turns.map(function (t) {
+          return { ai: t.ai, user: t.user, fb: t.fb || null };
+        })
+      });
+      if (log.length > 30) log = log.slice(-30);
+      try { localStorage.setItem(TALK_KEY, JSON.stringify(log)); } catch (e) {}
+    }
+    TALK.token++;
+    TALK.turns = [];
+    TALK.busy = false;
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    renderTalkSetup();
+    go('talk');
+  }
+
+  async function sendTalk() {
+    if (TALK.busy) return;
+    var text = $('talkInput').value.trim();
+    if (!text) return;
+    var last = TALK.turns[TALK.turns.length - 1];
+    if (!last || last.user) return;
+
+    last.user = text;
+    last.pending = true;
+    last.error = '';
+    $('talkInput').value = '';
+    TALK.busy = true;
+    syncTalkSend();
+    renderTalkLog();
+    await fetchMemberReply(TALK.turns.length - 1, text);
+  }
+
+  var TALK_SYS = '你在做「日语现场对话」角色扮演练习：你扮演一位不具名的现役偶像成员（虚构角色，不指向任何真实人物或团体），用户扮演前来参加活动的粉丝。你全程用日语说话。\n' +
+    '输出必须是且仅是一个 JSON 对象，不要 Markdown 代码围栏，不要任何解释文字。字段：\n' +
+    '{"reply":"你的日文台词，只含日语","zh":"reply 的中文翻译","verdict":"对用户刚才那句日语的一句话中文点评，不超过20字","highlights":["用户说得好的具体点，1条，中文，不超过25字"],"suggestions":["更地道的说法：把「A」换成「B」，B 必须是日语，1-2条，每条不超过45字"],"next":"中文提示：用户下一句可以聊什么，不超过25字"}\n' +
+    '规则：保持角色，绝不出戏，不承认自己是 AI；不出现真实人名、团体名、店铺名；不询问或评价用户的真实身份、住址、联系方式；不谈政治宗教与恋爱细节；用户如果用中文说，你仍用日语回应，并在 suggestions 里给出对应的日语说法；用户说得不对时不要直接批评，用 suggestions 给出更地道的版本；reply 要符合场景节奏，时间紧的场合只说一句。';
+
+  function buildTalkSystem(sc) {
+    return TALK_SYS +
+      '\n【本次场景】' + sc.zhName + '（' + sc.name + '）\n' + sc.briefing +
+      '\n【角色设定（日文）】' + sc.persona +
+      '\n【难度要求】' + (talkLevelInfo().rule || '');
+  }
+
+  function buildTalkUser(sc, text) {
+    var hist = [];
+    TALK.turns.slice(-6).forEach(function (t) {
+      if (t.ai && t.ai.ja) hist.push('成员：' + t.ai.ja);
+      if (t.user) hist.push('粉丝：' + t.user);
+    });
+    return '场景：' + sc.zhName +
+      '\n最近对话（由旧到新）：\n' + hist.join('\n') +
+      '\n\n粉丝刚才说：' + text +
+      '\n\n请按要求输出 JSON：reply 是你要说的日文台词，zh 是中文翻译，verdict/highlights/suggestions 点评粉丝刚才那句，next 提示粉丝下一句可以聊什么。';
+  }
+
+  function parseTalkReply(text) {
+    var t = String(text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+    var m = t.match(/\{[\s\S]*\}/);
+    var o = null;
+    if (m) { try { o = JSON.parse(m[0]); } catch (e) { o = null; } }
+    if (!o || !o.reply) {
+      var err = new Error('bad answer');
+      err.code = 'bad_answer';
+      throw err;
+    }
+    if (!Array.isArray(o.highlights)) o.highlights = o.highlights ? [String(o.highlights)] : [];
+    if (!Array.isArray(o.suggestions)) o.suggestions = o.suggestions ? [String(o.suggestions)] : [];
+    return o;
+  }
+
+  async function fetchMemberReply(turnIdx, text) {
+    var token = TALK.token;
+    var sc = talkScene();
+    var last = TALK.turns[turnIdx];
+    try {
+      var model = await getModel();
+      var out = '';
+      for await (var chunk of cloud.llm.chat.completions.create({
+        model: model.id,
+        messages: [
+          { role: 'system', content: buildTalkSystem(sc) },
+          { role: 'user', content: buildTalkUser(sc, text) }
+        ],
+        stream: true,
+        temperature: 0.8
+      })) {
+        var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+        if (delta && delta.content) out += delta.content;
+      }
+      if (token !== TALK.token) return;      // 会话已结束/重开，丢弃这次回复
+
+      var r = parseTalkReply(out);
+      last.pending = false;
+      last.error = '';
+      last.fb = { verdict: r.verdict || '', highlights: r.highlights, suggestions: r.suggestions, next: r.next || '' };
+
+      var plain = window.stripFuri ? window.stripFuri(r.reply) : r.reply;
+      TALK.turns.push({ ai: { ja: plain, furi: r.reply, zh: r.zh || '' }, user: null, fb: null });
+      TALK.busy = false;
+      renderTalkLog();
+      speak(plain, 'ja-JP', null, null, 'talkSpeechHint');
+    } catch (e) {
+      if (token !== TALK.token) return;
+      last.pending = false;
+      last.error = (cloudError && !cloud) ? cloudError : friendlyLLMError(e);
+      TALK.busy = false;
+      renderTalkLog();
+    }
+  }
+
+  // 语音输入（日语）
+  var talkRec = null, talkRecOn = false;
+  function stopTalkRec() {
+    if (talkRecOn && talkRec) { try { talkRec.stop(); } catch (e) {} }
+    talkRecOn = false;
+    if ($('talkMicBtn')) $('talkMicBtn').textContent = '🎤 语音输入';
+  }
+
+  function startTalkRec() {
+    if (!voiceSupported) {
+      $('talkSpeechHint').textContent = '当前浏览器不支持语音识别，请直接打字，或改用 Chrome / Edge。';
+      show($('talkSpeechHint'));
+      return;
+    }
+    if (talkRecOn) { stopTalkRec(); return; }
+
+    var rec = new SR();
+    rec.lang = 'ja-JP';
+    rec.interimResults = true;
+    rec.continuous = false;
+    var base = $('talkInput').value;
+
+    rec.onresult = function (e) {
+      var txt = '';
+      for (var i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      $('talkInput').value = base + txt;
+      syncTalkSend();
+    };
+    rec.onerror = function (e) {
+      talkRecOn = false;
+      $('talkMicBtn').textContent = '🎤 语音输入';
+      var msg = '识别出错，请重试或直接打字。';
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') msg = '麦克风权限被拒绝，请在浏览器地址栏允许麦克风。';
+      else if (e.error === 'no-speech') msg = '没有听到声音，请再点一次。';
+      $('talkSpeechHint').textContent = msg;
+      show($('talkSpeechHint'));
+    };
+    rec.onend = function () {
+      talkRecOn = false;
+      $('talkMicBtn').textContent = '🎤 语音输入';
+    };
+
+    try { rec.start(); } catch (e) { return; }
+    talkRec = rec;
+    talkRecOn = true;
+    clearSpeechHint();
+    $('talkMicBtn').textContent = '■ 停止录音';
+  }
+
   // ---------- 历史日志 ----------
   function loadLog() {
     try { return JSON.parse(localStorage.getItem(LOG_KEY)) || []; }
@@ -915,6 +1381,208 @@
     if (!confirm('确定清空全部练习记录吗？此操作无法恢复。')) return;
     localStorage.removeItem(LOG_KEY);
     renderHistory();
+  });
+
+  // ---------- 阅读模块事件 ----------
+  function goReading() {
+    renderReadingList();
+    go('reading');
+  }
+  $('navReading').addEventListener('click', goReading);
+  $('homeReadBtn').addEventListener('click', goReading);
+
+  $('readBackBtn').addEventListener('click', function () {
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    readingSeqRunning = false;
+    renderReadingList();
+  });
+
+  $('readList').addEventListener('click', function (e) {
+    var item = e.target.closest ? e.target.closest('.read-item') : null;
+    if (!item) return;
+    openArticle(item.dataset.id);
+  });
+
+  $('readBody').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-para]') : null;
+    if (!b || !READ.current) return;
+    var p = READ.current.paras[parseInt(b.dataset.para, 10)];
+    if (p) speak(p.ja, 'ja-JP', b, null, 'readSpeechHint');
+  });
+
+  $('readToggleZhBtn').addEventListener('click', function () {
+    READ.showZh = !READ.showZh;
+    this.textContent = READ.showZh ? '隐藏中文对照' : '显示中文对照';
+    renderReadBody();
+  });
+
+  var readingSeqRunning = false;
+  $('readSpeakAllBtn').addEventListener('click', function () {
+    if (!READ.current) return;
+    var btn = this;
+    if (readingSeqRunning) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+      readingSeqRunning = false;
+      setSpeakLabel(btn, false);
+      return;
+    }
+    readingSeqRunning = true;
+    clearSpeechHint();
+    speakSeq(READ.current.paras, 0, btn, function () {
+      readingSeqRunning = false;
+      setSpeakLabel(btn, false);
+    });
+  });
+
+  $('readQuiz').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('.qz-opt') : null;
+    if (!b || READ.submitted) return;
+    READ.answers[parseInt(b.dataset.q, 10)] = parseInt(b.dataset.o, 10);
+    renderQuiz();
+  });
+
+  $('readSubmitBtn').addEventListener('click', submitQuiz);
+
+  $('readRetryBtn').addEventListener('click', function () {
+    if (!READ.current) return;
+    READ.answers = READ.current.questions.map(function () { return null; });
+    READ.submitted = false;
+    hide($('readResult'));
+    $('readSubmitBtn').disabled = false;
+    renderQuiz();
+  });
+
+  document.querySelectorAll('#readCatRow .pill').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#readCatRow .pill').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      READ.cat = b.dataset.cat;
+      renderReadingList();
+    });
+  });
+  document.querySelectorAll('#readLevelRow .pill').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#readLevelRow .pill').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      READ.lv = parseInt(b.dataset.lv, 10);
+      renderReadingList();
+    });
+  });
+
+  // ---------- 对话模块事件 ----------
+  function goTalk() {
+    // 有进行中的会话就回到聊天，切走再回来不会丢上下文
+    if (TALK.turns.length) {
+      var sc = talkScene();
+      $('talkMeta').textContent = sc.emoji + ' ' + sc.zhName + ' · ' + LEVELS[TALK.level];
+      renderTalkLog();
+      hide($('talkSetupPane'));
+      show($('talkChatPane'));
+    } else {
+      renderTalkSetup();
+    }
+    go('talk');
+  }
+  $('navTalk').addEventListener('click', goTalk);
+  $('homeTalkBtn').addEventListener('click', goTalk);
+
+  $('talkSceneRow').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-scene]') : null;
+    if (!b) return;
+    TALK.sceneId = b.dataset.scene;
+    renderTalkSetup();
+  });
+
+  document.querySelectorAll('#talkLevelRow .pill').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#talkLevelRow .pill').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      TALK.level = parseInt(b.dataset.lv, 10);
+      $('talkLevelTip').textContent = '当前难度：' + (talkLevelInfo().hint || '');
+      renderTalkSetup();
+    });
+  });
+
+  $('talkStartBtn').addEventListener('click', startTalk);
+
+  $('talkEndBtn').addEventListener('click', function () {
+    var used = TALK.turns.filter(function (t) { return !!t.user; }).length;
+    if (used && !confirm('结束这次对话？' + used + ' 轮记录会保存在本浏览器里。')) return;
+    endTalk();
+  });
+
+  $('talkInput').addEventListener('input', syncTalkSend);
+  $('talkInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendTalk();
+    }
+  });
+  $('talkSendBtn').addEventListener('click', sendTalk);
+  $('talkMicBtn').addEventListener('click', startTalkRec);
+
+  $('talkHintBtn').addEventListener('click', function () {
+    var box = $('talkHintBox');
+    if (!box.classList.contains('hidden')) { hide(box); return; }
+    var sc = talkScene();
+    if (!sc) return;
+    box.innerHTML = '<div class="th-t">点一句就能填进输入框，改一改再发出去</div>' +
+      sc.phrases.map(function (p, i) {
+        return '<button class="th-item" data-phrase="' + i + '">' +
+          '<span class="th-ja">' + furiToHtml(p.furi) + '</span>' +
+          '<span class="th-zh">' + esc(p.zh) + '</span></button>';
+      }).join('');
+    show(box);
+  });
+
+  $('talkHintBox').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-phrase]') : null;
+    if (!b) return;
+    var sc = talkScene();
+    var p = sc && sc.phrases[parseInt(b.dataset.phrase, 10)];
+    if (!p) return;
+    $('talkInput').value = p.ja;
+    syncTalkSend();
+    $('talkInput').focus();
+    hide($('talkHintBox'));
+  });
+
+  $('talkLog').addEventListener('click', function (e) {
+    if (!e.target.closest) return;
+
+    var sp = e.target.closest('[data-speak]');
+    if (sp) {
+      var t = TALK.turns[parseInt(sp.dataset.speak, 10)];
+      if (t) speak(t.ai.ja, 'ja-JP', sp, null, 'talkSpeechHint');
+      return;
+    }
+
+    var zh = e.target.closest('[data-zh]');
+    if (zh) {
+      var bubble = zh.closest('.chat-bubble');
+      var el = bubble ? bubble.querySelector('.cb-zh') : null;
+      if (el) {
+        el.classList.toggle('hidden');
+        zh.textContent = el.classList.contains('hidden') ? '中文' : '收起';
+      }
+      return;
+    }
+
+    var rt = e.target.closest('[data-retry]');
+    if (rt) {
+      var i = parseInt(rt.dataset.retry, 10);
+      var turn = TALK.turns[i];
+      if (turn && turn.user && !TALK.busy) {
+        turn.error = '';
+        turn.pending = true;
+        TALK.busy = true;
+        syncTalkSend();
+        renderTalkLog();
+        fetchMemberReply(i, turn.user);
+      }
+    }
   });
 
   bindExpand('reportList');
