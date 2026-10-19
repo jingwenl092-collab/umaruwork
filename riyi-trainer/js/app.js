@@ -339,24 +339,27 @@
     }, 300);
   }
 
-  // 选语音：优先本地语音（localService），远端/网络语音在离线或权限受限时会静默失败
+  // 选语音。优先级：本地精确 > 网络精确 > 本地同语种 > 网络同语种。
+  // 浏览器自带的「网络语音」（Chrome 的 Google 日本語、Edge 的 Microsoft 在线自然语音）不用装系统语音包，
+  // 但要联网——很多人「以前没装语音包也有声音」就是靠它，所以不能把它排除掉
   function pickVoice(lang) {
     refreshVoices();
     if (!speechVoices.length) return null;
     var want = String(lang || '').toLowerCase();
     var head = want.split('-')[0];
-    var i, v, l, exact = null, localExact = null, loose = null;
+    var i, v, l, localExact = null, exact = null, localLoose = null, loose = null;
     for (i = 0; i < speechVoices.length; i++) {
       v = speechVoices[i];
       l = String(v.lang || '').toLowerCase().replace('_', '-');
       if (l === want) {
         if (!exact) exact = v;
-        if (v.localService !== false) { localExact = v; break; }
-      } else if (!loose && l.indexOf(head) === 0 && v.localService !== false) {
-        loose = v;
+        if (v.localService !== false && !localExact) localExact = v;
+      } else if (l.indexOf(head) === 0) {
+        if (!loose) loose = v;
+        if (v.localService !== false && !localLoose) localLoose = v;
       }
     }
-    return localExact || exact || loose;
+    return localExact || exact || localLoose || loose;
   }
 
   function clearSpeechHint() {
@@ -366,14 +369,26 @@
     });
   }
 
-  function showSpeechHint(lang, targetId) {
+  // kind: 不传=通用排查；'novoice'=根本没找到对应语种的语音；'remote'=用的是浏览器网络语音
+  function showSpeechHint(lang, targetId, kind) {
     var el = $(targetId || 'speechHint');
     if (!el) return;
     var isJa = String(lang || '').toLowerCase().indexOf('ja') === 0;
-    el.textContent = (isJa
-      ? '听不到声音？这台设备可能缺少日语语音包。Windows：设置 → 时间和语言 → 语言和区域 → 添加语言「日本語」并勾选「语音」；'
-      : '听不到声音？请在系统语言设置里安装中文语音包；') +
-      '若语音包已装好仍无声，多半是浏览器语音引擎被卡住了——先刷新页面，再检查系统音量、输出设备与 Chrome 的站点声音权限，或换 Chrome / Edge 再试。';
+    var txt;
+    if (kind === 'novoice') {
+      txt = isJa
+        ? '这台设备没有日语语音，刚才用浏览器默认语音读出声了，发音可能不准。想要地道发音：Windows 设置 → 时间和语言 → 语言和区域 → 日语 → 选项 → 下载「文本转语音」（约 25MB），装完彻底退出浏览器再打开。'
+        : '这台设备没有中文语音，刚才用浏览器默认语音读出声了。请在系统语言设置里安装中文语音包。';
+    } else if (kind === 'remote') {
+      txt = '没出声。当前用的是浏览器的网络语音（Chrome 的 Google 日本語 / Edge 的在线自然语音），它需要联网——' +
+        '请确认网络可用、没有被代理或防火墙拦掉，然后刷新页面重试；想彻底不依赖网络就安装日语语音包。';
+    } else {
+      txt = (isJa
+        ? '听不到声音？这台设备可能缺少日语语音包。Windows：设置 → 时间和语言 → 语言和区域 → 添加语言「日本語」并勾选「语音」；'
+        : '听不到声音？请在系统语言设置里安装中文语音包；') +
+        '若语音包已装好仍无声，多半是浏览器语音引擎被卡住了——先刷新页面，再检查系统音量、输出设备与 Chrome 的站点声音权限，或换 Chrome / Edge 再试。';
+    }
+    el.textContent = txt;
     show(el);
   }
 
@@ -403,12 +418,11 @@
 
     var v = pickVoice(lang);
     if (v && !retry) u.voice = v;
+    var remote = !!(v && v.localService === false);
 
-    if (!retry && speechVoices.length && !v) {
-      showSpeechHint(lang, hintId);
-      if (onDone) onDone();
-      return;
-    }
+    // 一个对应语种的语音都没有时，不再闷声放弃：不指定 voice 交给浏览器默认语音，
+    // 至少让用户听到东西，同时说清楚发音可能不准
+    if (!retry && speechVoices.length && !v) showSpeechHint(lang, hintId, 'novoice');
 
     var started = false;
     var finished = false;
@@ -427,9 +441,9 @@
     function fallback(reason) {
       if (finished || started) return;
       if (watch) clearTimeout(watch);
-      if (reason === 'silent') showSpeechHint(lang, hintId);
+      if (reason === 'silent') showSpeechHint(lang, hintId, remote ? 'remote' : null);
       if (retry) {
-        showSpeechHint(lang, hintId);
+        showSpeechHint(lang, hintId, remote ? 'remote' : null);
         finishOnce();
         return;
       }
@@ -495,9 +509,12 @@
     refreshVoices();
     var ja = pickVoice('ja-JP');
     var zh = pickVoice('zh-CN');
+    function vDesc(v) {
+      if (!v) return '未找到';
+      return v.name + (v.localService === false ? '（网络语音，需联网）' : '（本地）');
+    }
     var info = '可用语音 ' + speechVoices.length + ' 个' +
-      '；日语：' + (ja ? ja.name : '未找到') +
-      '；中文：' + (zh ? zh.name : '未找到');
+      '；日语：' + vDesc(ja) + '；中文：' + vDesc(zh);
 
     var synth = window.speechSynthesis;
     try { synth.cancel(); } catch (e) {}
