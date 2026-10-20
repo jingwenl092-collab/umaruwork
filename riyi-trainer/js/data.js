@@ -22,7 +22,12 @@
       level: s.level,
       zh: s.zh,
       ja: stripFuri(s.ja),   // 纯文本（无注音）
-      furi: s.ja             // 原样保留，含 {汉字|读音} 标记
+      furi: s.ja,            // 原样保留，含 {汉字|读音} 标记
+      // 可接受的其他说法：翻译没有唯一标准答案，学员答出任何一个都能判对
+      alts: (s.alt || []).map(function (a) {
+        return { ja: stripFuri(a), furi: a };
+      }),
+      gram: s.gram || ''     // 这句话的语法点小结，讲评时展示
     };
   });
 

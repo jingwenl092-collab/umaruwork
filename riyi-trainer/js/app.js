@@ -72,11 +72,20 @@
   function cleanStr(s) {
     return String(s || '').replace(PUNC_RE, '');
   }
+  // 句尾语气助词（よ/ね/わ/な、吗/呢/吧/啊）在口语里可加可不加，比对时视为可忽略差异
+  function trimTail(s) {
+    return s.replace(/([よねわな吗呢吧啊哈哦呀哟啦ー])+$/, '');
+  }
+  // 把带注音标记的句子转成「全假名」——用户打的假名也能和参考译文里的汉字对上
+  function furiToKana(furi) {
+    return String(furi || '').replace(/\{([^{}|]+)\|([^{}|]+)\}/g, '$2');
+  }
 
-  // 基于最长公共子序列（LCS）的字符级 Diff 与重合度计算
-  function compareTexts(userRaw, refRaw) {
-    var u = Array.from(cleanStr(userRaw));
-    var r = Array.from(cleanStr(refRaw));
+  // 单候选比对：LCS 字符级 diff。比对基准取所有候选中与学员输入最接近的一个，
+  // 所以学员答出任何一个可接受说法，都能拿到干净的绿色高亮
+  function compareOne(userRaw, refRaw) {
+    var u = Array.from(trimTail(cleanStr(userRaw)));
+    var r = Array.from(trimTail(cleanStr(refRaw)));
     var m = u.length, n = r.length;
 
     var dp = [];
@@ -109,12 +118,14 @@
       }
     }
 
-    // 把命中标记映射回带标点的原串
+    // 把命中标记映射回带标点的原串。
+    // idx 超出 hit 数组的字符（被宽容剥离的句尾语气助词）按中性色渲染，不标红
     function renderHighlighted(rawStr, hitArr) {
       var chars = Array.from(String(rawStr || ''));
       var idx = 0;
       return chars.map(function (ch) {
         if (PUNC_ONE.test(ch)) return esc(ch);
+        if (idx >= hitArr.length) return esc(ch);
         var hit = hitArr[idx++];
         return hit
           ? '<span class="diff-hit">' + esc(ch) + '</span>'
@@ -123,10 +134,10 @@
     }
 
     var verdict = '';
-    if (score >= 85) verdict = '非常地道！核心表达与参考译文高度一致。';
-    else if (score >= 60) verdict = '大意已传达，部分词句或语序可对照参考译文精进。';
-    else if (score >= 35) verdict = '抓住了部分关键词，建议多听几遍参考译文跟读模仿。';
-    else verdict = '与参考译文差异较大，不妨对照下方标红处复盘句型。';
+    if (score >= 85) verdict = '非常地道！核心表达完全对上了。';
+    else if (score >= 65) verdict = '意思传达到了，个别词句可以更贴近现场说法。';
+    else if (score >= 40) verdict = '抓住了关键部分，多听几遍参考译文跟读模仿。';
+    else verdict = '意思有偏差，看看标红处，对照参考译文复盘句型。';
 
     return {
       score: score,
@@ -134,6 +145,26 @@
       userHtml: renderHighlighted(userRaw, uHit),
       refDiffHtml: renderHighlighted(refRaw, rHit)
     };
+  }
+
+  // 多通道多候选比对。翻译没有唯一答案：
+  //   ① 候选不止一个（参考译文 + alt 其他说法），任一接近都算对
+  //   ② 每个候选跑两条通道：原文通道（用户打汉字时命中）＋ 全假名通道（用户打假名时命中）
+  // 返回得分最高的通道，refIndex 告诉展示层命中了哪个候选
+  function compareTexts(userRaw, refRaw, altJas, kanaList) {
+    var texts = [refRaw].concat(altJas || []);
+    var best = null, bestIdx = 0;
+    for (var k = 0; k < texts.length; k++) {
+      var one = compareOne(userRaw, texts[k]);
+      if (kanaList && kanaList[k]) {
+        var kn = compareOne(userRaw, kanaList[k]);
+        if (kn.score > one.score) { kn.viaKana = true; one = kn; }
+      }
+      if (!best || one.score > best.score) { best = one; bestIdx = k; }
+    }
+    best.refIndex = bestIdx;
+    best.refMatched = bestIdx > 0 ? texts[bestIdx] : refRaw;
+    return best;
   }
 
   // ---------- 云端 AI 讲评（keyless 云 LLM） ----------
@@ -159,7 +190,7 @@
     }
   }
 
-  var SYSTEM_PROMPT = '你是资深中日翻译教练，正在一对一指导学员练句子翻译。学员作答可能来自语音识别，若有同音错字请按其本意宽容评价。输出必须是且仅是一个 JSON 对象，不要打分，不要多余文字。长度限制：verdict 为一句话总评，不超过20字；highlights 为做得好的点，1-2条，每条不超过25字；suggestions 为改进建议，1-2条，每条不超过40字且必须写出更地道的正确说法。格式：{"verdict":"","highlights":[],"suggestions":[]}';
+  var SYSTEM_PROMPT = '你是资深中日翻译教练，正在一对一指导学员练句子翻译。翻译没有唯一标准答案：学员的说法若意思一致且本身地道，即使措辞与参考译文不同也应肯定，不要以「与参考译文不一致」为由扣分。学员作答可能来自语音识别，若有同音错字请按其本意宽容评价。输出必须是且仅是一个 JSON 对象，不要打分，不要多余文字。长度限制：verdict 为一句话总评，不超过20字；highlights 为做得好的点，1-2条，每条不超过25字；suggestions 为改进建议，1-2条，每条不超过40字且必须写出更地道的正确说法。格式：{"verdict":"","highlights":[],"suggestions":[]}';
 
   // 把 SDK 抛出的错误码翻译成人话
   function friendlyLLMError(error) {
@@ -206,14 +237,18 @@
   }
 
   // 云端仅支持流式调用，必须 stream:true 并用 for await 逐块拼接
-  async function getFeedback(dir, source, reference, userText) {
+  async function getFeedback(dir, source, reference, userText, alts) {
     var model = await getModel();
     var dirText = dir === 'zh2ja'
       ? '中译日（把中文原句译成日语）'
       : '日译中（把日语原句译成中文）';
+    var altArr = (alts || []).filter(function (a) { return a !== reference; });
+    var altLine = altArr.length
+      ? '\n其他同样地道的说法（学员答出其中任何一个都算对，不得判为错误）：' + altArr.join(' ／ ')
+      : '';
     var userContent = '练习方向：' + dirText +
       '\n原句：' + source +
-      '\n参考译文：' + reference +
+      '\n参考译文：' + reference + altLine +
       '\n学员的翻译（可能来自语音识别转写）：' + userText +
       '\n请按要求输出 JSON 讲评。';
 
@@ -273,7 +308,7 @@
     var token = ++aiToken;
     setAIState('aiLoading');
     try {
-      var f = await getFeedback(call.dir, call.source, call.reference, call.userText);
+      var f = await getFeedback(call.dir, call.source, call.reference, call.userText, call.alts);
       if (token !== aiToken) return;   // 用户已翻到下一句，结果作废
       $('aiContent').innerHTML = renderAIContent(f);
       setAIState('aiContent');
@@ -741,13 +776,25 @@
       srcFuri: state.dir === 'ja2zh' ? s.furi : null,
       reference: currentRef(s),
       refFuri: s.furi,
+      alts: state.dir === 'zh2ja' ? (s.alts || []).map(function (a) { return a.ja; }) : [],
+      altFuris: state.dir === 'zh2ja' ? (s.alts || []).map(function (a) { return a.furi; }) : [],
+      gram: s.gram || '',
       userText: userText
     };
+    // 全假名通道：参考译文里每个「{漢字|よみ}」都换成よみ，用户打假名也能对上
+    var kanaList = state.dir === 'zh2ja'
+      ? [call.refFuri].concat(call.altFuris).map(furiToKana)
+      : null;
     state.lastCall = call;
     $('answerInput').readOnly = true;
     $('submitBtn').disabled = true;
 
-    var diff = compareTexts(call.userText, call.reference);
+    var diff = compareTexts(call.userText, call.reference, call.alts, kanaList);
+    // 学员答的说法与某个可接受说法更接近时，参考译文就展示那个说法（含振假名）
+    if (diff.refIndex > 0) {
+      call.reference = diff.refMatched;
+      call.refFuri = call.altFuris[diff.refIndex - 1] || call.refFuri;
+    }
     renderFeedback(diff, call);
 
     // 本地比对先立刻呈现，AI 讲评在后台补上（失败也不影响本地结果）
@@ -770,8 +817,12 @@
     $('fbBadge').textContent = badgeText;
     $('fbVerdict').textContent = diff.verdict;
 
-    var html = '<div class="fb-sec"><div class="fb-sec-t">你的翻译（绿底=命中字词，红底波浪线=差异字词）</div>' +
+    var html = '<div class="fb-sec"><div class="fb-sec-t">你的翻译（绿底=命中字词，红底波浪线=差异字词；意思对就行，不追求逐字一致）</div>' +
       '<div class="fb-user">' + diff.userHtml + '</div></div>';
+    if (call.gram) {
+      html += '<div class="fb-sec"><div class="fb-sec-t">📌 这句话的语法点</div>' +
+        '<div class="fb-gram">' + esc(call.gram) + '</div></div>';
+    }
     $('fbBody').innerHTML = html;
 
     // 中→日方向：参考译文用振假名渲染 + 下方附带字面命中标注

@@ -49,14 +49,29 @@ S.forEach(function (s, i) {
   if (!s.ja || !s.ja.trim()) errs.push(tag + ' 日文为空');
   if (!/[\u3040-\u30ff]/.test(s.ja)) errs.push(tag + ' 日文无假名: ' + s.ja);
   checkFuri(s.furi, tag, s.ja);
+  // 可接受的其他说法：注音必须配对、不得与主译文重复
+  (s.alts || []).forEach(function (a, ai) {
+    var atag = tag + ' alt' + (ai + 1);
+    if (!a.ja || !a.ja.trim()) { errs.push(atag + ' 为空'); return; }
+    if (/[\u4e00-\u9fff]/.test(a.furi) && !/[\u3040-\u30ff]/.test(a.ja)) errs.push(atag + ' 无假名: ' + a.ja);
+    checkFuri(a.furi, atag, a.ja);
+    if (a.ja === s.ja) errs.push(atag + ' 与主译文重复');
+  });
   if (seenJa[s.ja]) errs.push(tag + ' 日文重复（与 #句' + seenJa[s.ja] + '）');
   else seenJa[s.ja] = i + 1;
   if (seenZh[s.zh]) errs.push(tag + ' 中文重复');
   else seenZh[s.zh] = i + 1;
-  // 日常生活场景不得出现重敬语（用户反馈的整改项）
-  if (s.scene === 'daily' && /させていただ|でござい|ございました|拝受|お伝えください|ご回答/.test(s.ja)) {
+  // 日常生活场景不得出现重敬语（用户反馈的整改项），主译文与 alt 都要查
+  var heavy = /させていただ|でござい|ございました|拝受|お伝えください|ご回答/;
+  if (s.scene === 'daily' && heavy.test(s.ja)) {
     errs.push(tag + ' 日常场景出现重敬语: ' + s.ja);
   }
+  (s.alts || []).forEach(function (a, ai) {
+    if (s.scene === 'daily' && heavy.test(a.ja)) {
+      errs.push(tag + ' alt' + (ai + 1) + ' 日常场景出现重敬语: ' + a.ja);
+    }
+  });
+  if (!s.gram) warns.push(tag + ' 缺少语法点小结（gram）');
 });
 
 SCENES.forEach(function (sc) {
