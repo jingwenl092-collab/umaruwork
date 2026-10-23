@@ -3,6 +3,16 @@
 ## 项目定位
 中日翻译/口译「技能训练」网页应用（用户已确认）。练翻译用，不是实时翻译工具。
 
+## 模块构成（v5）
+- 翻译练习（题库 240 句）、**阅读**（9 篇内置长文）、**对话**（偶像活动场景 AI 陪练，v5 新增）
+- 阅读素材 `js/data-reading.js`；对话素材 `js/data-talk.js`；两者都在 `data.js` 归一化出 `READING` / `TALK`
+- 对话模块：4 场景（handshake/hightouch/birthday/release）× 3 难度，AI 扮演**虚构通用成员**
+  （check-data 用 `BANNED` 正则拦截 AKB/=LOVE/指原等真实名）；单次 LLM 调用同时产出
+  `{reply, zh, verdict, highlights, suggestions, next}`；`TALK.token` 丢弃过期回复；
+  会话存 `localStorage['riyi_talk_v1']`（上限 30 场），离开页面再回来可继续
+- 回归测试：`.workbuddy/tmp-read-smoke.js` / `tmp-talk-smoke.js`（仓库根 `node .workbuddy/tmp-xxx.js`，
+  已 gitignore）。DOM 桩里 `target.closest` 必须按选择器分辨，否则事件委托分支会被吞、造成假失败
+
 ## 第一版范围（已确认）
 - 四页面：首页（方向/难度/场景选择 + 概览）、练习页（核心）、练习报告页、历史记录页
 - 六步练习循环：出题 → 语音口译/打字输入 → 确认识别文本 → AI 讲评 → 反馈卡片 → 下一句；满 10 句进报告页

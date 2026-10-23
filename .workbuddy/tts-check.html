@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>朗读自检 · 日译训练场</title>
+<style>
+  body { margin:0; background:#ECF2EA; color:#2C382F;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; font-size:15px; line-height:1.7; }
+  .wrap { max-width:720px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-size:22px; color:#22492F; margin:0 0 4px; }
+  .sub { color:#71806E; font-size:14px; margin:0 0 18px; }
+  .card { background:#fff; border:1px solid #D6E2D1; border-radius:16px; padding:18px 20px; margin-top:14px; }
+  h2 { font-size:15px; color:#47835F; margin:0 0 8px; }
+  button { font-family:inherit; cursor:pointer; border:1px solid #D6E2D1; background:#F5F9F3;
+    color:#35684A; border-radius:10px; padding:9px 16px; font-size:14px; margin:4px 6px 4px 0; }
+  button:hover { border-color:#47835F; background:#DEEDE2; }
+  button.on { background:#47835F; color:#fff; border-color:#47835F; }
+  .res { margin-top:10px; padding:10px 12px; border-radius:10px; background:#F5F9F3;
+    font-size:13.5px; color:#2C382F; white-space:pre-wrap; }
+  .res.warn { background:#F5EDDC; } .res.bad { background:#F3E5E2; } .res.good { background:#DEEDE2; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  th,td { text-align:left; padding:6px 8px; border-bottom:1px solid #E6EEE3; }
+  th { color:#71806E; font-weight:600; }
+  .tag { display:inline-block; font-size:11.5px; padding:1px 8px; border-radius:999px;
+    background:#DEEDE2; color:#22492F; margin-right:6px; }
+  ol { padding-left:20px; margin:8px 0 0; color:#4C5A50; font-size:14px; }
+  code { background:#F5F9F3; padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔊 朗读自检</h1>
+  <p class="sub">双击本文件即可打开，不需要联网。它会告诉你：这台设备到底能不能发声、缺哪个语音包。</p>
+
+  <div class="card">
+    <h2>① 浏览器支持</h2>
+    <div class="res" id="r0">检测中…</div>
+  </div>
+
+  <div class="card">
+    <h2>② 已安装的语音</h2>
+    <div id="r1" class="res">读取中…（Chrome 首次读取语音列表可能要等几秒）</div>
+    <div id="voiceTable"></div>
+    <div style="margin-top:10px">
+      <button id="reloadBtn">重新读取语音列表</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>③ 试听</h2>
+    <button id="jaBtn">试听日语「こんにちは」</button>
+    <button id="zhBtn">试听中文「你好，今天也一起练习吧」</button>
+    <button id="stopBtn">停止</button>
+    <div class="res" id="r2">还没试听。</div>
+  </div>
+
+  <div class="card">
+    <h2>④ 如果还是没声音，按这个顺序排查</h2>
+    <ol>
+      <li><b>刷新页面</b>（Ctrl + F5）。Chrome 的语音引擎经常会被卡住，刷新是最有效的一招。</li>
+      <li><b>看系统音量和输出设备</b>：右下角喇叭 → 打开音量合成器，确认浏览器没被静音、输出设备是你正在用的那个。</li>
+      <li><b>看 Chrome 的站点声音</b>：地址栏最左侧的图标 → 权限里「声音」选「允许」；或在标签页上右键，确认没有「静音网站」。</li>
+      <li><b>看上面第 ② 步里日语那行标的是「本地」还是「网络语音」</b>：标「网络语音」说明不用装语音包，但要联网——换 Edge 打开、或检查代理/防火墙，往往就能恢复；标「本地」才是真正装好了语音包。</li>
+      <li><b>确认装了日语语音包</b>：Windows 设置 → 时间和语言 → 语言和区域 → 添加语言「日本語」→ 选项 → 下载「<b>文本转语音</b>」（注意不是「语音识别」，那是给语音输入用的）；macOS：系统设置 → 辅助功能 → 朗读内容 → 系统语音 → 下载「Otoya / Kyoko」。</li>
+      <li><b>换 Edge 或 Chrome 再试</b>。Safari / Firefox 对日语语音的支持差别很大。</li>
+      <li>上面第 ② 步里如果 <code>ja-JP</code> 一行都没有，那就是缺语音包，装完重启浏览器再来。</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var log = [];
+
+function setRes(id, text, cls) {
+  var el = $(id);
+  el.textContent = text;
+  el.className = 'res' + (cls ? ' ' + cls : '');
+}
+
+// ① 浏览器支持
+if (!('speechSynthesis' in window)) {
+  setRes('r0', '❌ 这个浏览器不支持语音合成（Web Speech API）。请改用 Chrome 或 Edge。', 'bad');
+} else {
+  setRes('r0', '✅ 支持语音合成（speechSynthesis 可用）。', 'good');
+}
+
+// ② 语音列表
+var voices = [];
+function renderVoices() {
+  voices = window.speechSynthesis.getVoices() || [];
+  if (!voices.length) {
+    setRes('r1', '⚠️ 语音列表为空。Chrome 常在页面刚打开时返回空列表——等 2 秒再点「重新读取语音列表」；' +
+      '如果一直为空，说明系统没有可用的语音引擎。', 'warn');
+    $('voiceTable').innerHTML = '';
+    return;
+  }
+  var ja = voices.filter(function (v) { return /^ja/i.test(v.lang || ''); });
+  var zh = voices.filter(function (v) { return /^zh/i.test(v.lang || ''); });
+  var isNet = function (v) { return v.localService === false; };
+  var jaLocal = ja.filter(function (v) { return !isNet(v); }).length;
+  var jaNet = ja.length - jaLocal;
+
+  var tail = '';
+  if (jaLocal) tail = '（其中本地 ' + jaLocal + ' 个、网络 ' + jaNet + ' 个）✅ 本地语音已装好，离线也能读。';
+  else if (jaNet) tail = '⚠️ 只有网络语音（Chrome 的「Google 日本語」/ Edge 的在线自然语音）：' +
+    '不用装语音包，但每次朗读都要联网，网络或代理异常时就会突然没声音。';
+  else tail = '❌ 一个日语语音都没有：朗读会用默认语音（中文）硬读，发音不准。' +
+    '建议装日语语音包——设置 → 时间和语言 → 语言和区域 → 日语 → 选项 → 下载「文本转语音」，' +
+    '或在管理员终端跑 DISM /Online /Add-Capability /CapabilityName:Language.TextToSpeech~~~ja-JP~0.0.1.0';
+
+  setRes('r1', '共 ' + voices.length + ' 个语音；日语 ja-JP ' + ja.length + ' 个 ' + tail +
+    '；中文 zh ' + zh.length + ' 个' + (zh.length ? ' ✅' : ' ❌'),
+    jaLocal ? 'good' : (jaNet ? 'warn' : 'bad'));
+
+  var rows = voices.map(function (v) {
+    var isJa = /^ja/i.test(v.lang || ''), isZh = /^zh/i.test(v.lang || '');
+    return '<tr><td>' + (v.lang || '-') + '</td><td>' + (v.name || '-') + '</td>' +
+      '<td>' + (v.localService === false ? '网络语音' : '本地') + '</td>' +
+      '<td>' + (isJa ? '<span class="tag">日语</span>' : isZh ? '<span class="tag">中文</span>' : '') +
+      '<button data-name="' + (v.name || '') + '">试听</button></td></tr>';
+  }).join('');
+  $('voiceTable').innerHTML = '<table><tr><th>语种</th><th>名称</th><th>类型</th><th>操作</th></tr>' + rows + '</table>';
+
+  $('voiceTable').querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = null;
+      voices.forEach(function (x) { if (x.name === b.dataset.name) v = x; });
+      test(v, v && /^ja/i.test(v.lang || '') ? 'こんにちは' : '你好');
+    });
+  });
+}
+
+// ③ 试听：盯 onstart，抓静默失败
+function test(voice, text) {
+  var synth = window.speechSynthesis;
+  try { synth.cancel(); } catch (e) {}
+  var u = new SpeechSynthesisUtterance(text);
+  if (voice) { u.voice = voice; u.lang = voice.lang; }
+  else if (/^[^a-zA-Z]*$/.test(text) && /[\u3040-\u30ff\u4e00-\u9fff]/.test(text)) { u.lang = 'ja-JP'; }
+  u.volume = 1; u.rate = 0.95;
+
+  var started = false, settled = false;
+  setRes('r2', '🔊 正在试听「' + text + '」' + (voice ? '（' + voice.name + '）' : '（默认语音）') + '…');
+
+  var watch = setTimeout(function () {
+    if (settled) return;
+    settled = true;
+    setRes('r2', '⚠️ 2 秒内没有开始发声 —— 这就是「静默失败」：浏览器收下了请求但没出声。\n' +
+      '按顺序做：刷新页面 → 检查系统音量与输出设备 → 检查 Chrome 站点声音权限 → 换 Chrome/Edge。\n' +
+      '若上方列表里没有 ja-JP，则还需要安装日语语音包。', 'warn');
+  }, 2000);
+
+  u.onstart = function () {
+    started = true;
+    if (settled) return;
+    settled = true; clearTimeout(watch);
+    setRes('r2', '✅ 已开始发声（' + (voice ? voice.name : '默认语音') + '）。能听到就说明朗读功能正常。', 'good');
+  };
+  u.onend = function () {
+    if (!started) return;
+    setRes('r2', '✅ 播完了（' + (voice ? voice.name : '默认语音') + '）。朗读功能正常。', 'good');
+  };
+  u.onerror = function (e) {
+    if (settled) return;
+    settled = true; clearTimeout(watch);
+    setRes('r2', '❌ 发声报错：' + (e && e.error ? e.error : 'unknown') + '。请安装对应语音包或换 Chrome / Edge。', 'bad');
+  };
+
+  setTimeout(function () {
+    try { synth.resume(); } catch (e) {}
+    try { synth.speak(u); } catch (e) { setRes('r2', '❌ 调用 speak 抛错：' + e.message, 'bad'); }
+    setTimeout(function () { try { if (synth.paused) synth.resume(); } catch (e) {} }, 80);
+  }, 150);
+}
+
+renderVoices();
+if ('speechSynthesis' in window) {
+  speechSynthesis.addEventListener('voiceschanged', renderVoices);
+  var tries = 0;
+  var t = setInterval(function () {
+    if ((speechSynthesis.getVoices() || []).length || ++tries >= 12) clearInterval(t);
+    renderVoices();
+  }, 500);
+}
+
+$('reloadBtn').addEventListener('click', renderVoices);
+$('jaBtn').addEventListener('click', function () {
+  var v = null;
+  voices.forEach(function (x) { if (!v && /^ja/i.test(x.lang || '')) v = x; });
+  test(v, 'こんにちは');
+});
+$('zhBtn').addEventListener('click', function () {
+  var v = null;
+  voices.forEach(function (x) { if (!v && /^zh/i.test(x.lang || '')) v = x; });
+  test(v, '你好，今天也一起练习吧');
+});
+$('stopBtn').addEventListener('click', function () {
+  try { speechSynthesis.cancel(); } catch (e) {}
+  setRes('r2', '已停止。');
+});
+</script>
+</body>
+</html>
